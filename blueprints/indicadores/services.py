@@ -636,6 +636,7 @@ def calcular_indicadores(fecha_inicio, fecha_fin, nivel=None, nivel_id=None):
         OrdenTrabajo.fechaCreacion >= fi,
         OrdenTrabajo.fechaCreacion <= ff,
     )
+    pares = None
     if nivel and nivel_id:
         pares = _get_pares_bajo_nodo(nivel, nivel_id)
         # Agrupar por tipo para construir OR eficiente
@@ -731,6 +732,27 @@ def calcular_indicadores(fecha_inicio, fecha_fin, nivel=None, nivel_id=None):
 
     # ── Indicadores Económicos ────────────────────────────────────────────────
 
+    # RAV total (suma de rav de máquinas y elementos en scope)
+    if pares is not None:
+        maq_ids = [i for t, i in pares if t == 'maquina']
+        ele_ids = [i for t, i in pares if t == 'elemento']
+        rav_maq = (db.session.query(func.sum(Maquina.rav))
+                   .filter(Maquina.id.in_(maq_ids)).scalar() or 0.0) if maq_ids else 0.0
+        rav_ele = (db.session.query(func.sum(Elemento.rav))
+                   .filter(Elemento.id.in_(ele_ids)).scalar() or 0.0) if ele_ids else 0.0
+        rav_total = rav_maq + rav_ele
+    else:
+        rav_total = (
+            (db.session.query(func.sum(Maquina.rav)).scalar() or 0.0) +
+            (db.session.query(func.sum(Elemento.rav)).scalar() or 0.0)
+        )
+
+    # E1 - Coste total mantenimiento / RAV
+    e1 = (coste_total / rav_total * 100) if rav_total > 0 else None
+
+    # E14 - Valor stock recambios / RAV (stock es global, no por scope de equipo)
+    e14 = (valor_stock / rav_total * 100) if rav_total > 0 else None
+
     # E6 - % coste correctivo
     e6 = (coste_correctivo / coste_total * 100) if coste_total > 0 else None
 
@@ -781,15 +803,15 @@ def calcular_indicadores(fecha_inicio, fecha_fin, nivel=None, nivel_id=None):
     return {
         'economicos': {
             'E1': {
-                'valor': None, 'unidad': '%', 'nombre': 'Coste Mtto / RAV (E1)',
-                'nd': True, 'nota': 'Requiere campo "valor_reposicion" en equipos'
+                'valor': _fmt(e1), 'unidad': '%', 'nombre': 'Coste Mtto / RAV (E1)',
+                **({'nd': True, 'nota': 'Sin RAV definido en los equipos del scope'} if e1 is None else {}),
             },
             'E6': {'valor': _fmt(e6), 'unidad': '%', 'nombre': '% Coste correctivo (E6)'},
             'E7': {'valor': _fmt(e7), 'unidad': '%', 'nombre': '% Coste preventivo (E7)'},
             'E13': {'valor': _fmt(e13), 'unidad': '%', 'nombre': '% Coste materiales (E13)'},
             'E14': {
-                'valor': None, 'unidad': '%', 'nombre': 'Stock / RAV (E14)',
-                'nd': True, 'nota': 'Requiere campo "valor_reposicion" en equipos'
+                'valor': _fmt(e14), 'unidad': '%', 'nombre': 'Stock / RAV (E14)',
+                **({'nd': True, 'nota': 'Sin RAV definido en los equipos del scope'} if e14 is None else {}),
             },
         },
         'tecnicos': {
