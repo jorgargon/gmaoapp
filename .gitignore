@@ -13,10 +13,9 @@ env/
 .venv
 
 # Flask / SQLite
-instance/
-*.db
 *.db-journal
 *.db.bak
+instance/*.bak
 
 # Claude Code local settings
 .claude/
