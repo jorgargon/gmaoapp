@@ -21,6 +21,7 @@ from functools import wraps
 
 import json
 import re
+import os
 
 # =============================================================================
 # DETECCIÓN DE DISPOSITIVO MÓVIL
@@ -72,9 +73,9 @@ def getEquipoNombre(tipo, id):
 # =============================================================================
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///gmao.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///gmao.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'gmao-secret-key-2024'
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'gmao-secret-key-2024')
 
 db.init_app(app)
 
@@ -117,7 +118,7 @@ def mobile_guard():
 # CONFIGURACIÓN JWT
 # =============================================================================
 
-app.config['JWT_SECRET_KEY'] = 'gmao-jwt-super-secret-key-2026'
+app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY', 'gmao-jwt-super-secret-key-2026')
 app.config['JWT_TOKEN_LOCATION'] = ['cookies']
 app.config['JWT_COOKIE_SECURE'] = False # True si usas HTTPS
 app.config['JWT_COOKIE_CSRF_PROTECT'] = False # Desactivado por simplicidad, activar en prod
@@ -2999,4 +3000,6 @@ def eliminarUsuario(id):
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    port = int(os.environ.get('PORT', 5001))
+    debug = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
+    app.run(debug=debug, host='0.0.0.0', port=port)
