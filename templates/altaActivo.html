@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container mt-4">
+    <h2>Alta de Activo</h2>
+
+    <form id="formAltaActivo" action="{{ url_for('guardarActivo') }}" method="post">
+        <div class="row">
+            <!-- Jerarquía -->
+            <div class="col-md-12">
+                <div class="form-group">
+                    <label for="plantaSelect">Planta</label>
+                    <select name="planta" id="plantaSelect" class="form-control">
+                        <option value="">Seleccione una planta</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="zonaSelect">Zona</label>
+                    <select name="zona" id="zonaSelect" class="form-control">
+                        <option value="">Seleccione una zona</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="lineaSelect">Línea</label>
+                    <select name="linea" id="lineaSelect" class="form-control">
+                        <option value="">Seleccione una línea</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="maquinaSelect">Máquina</label>
+                    <select name="maquina" id="maquinaSelect" class="form-control">
+                        <option value="">Seleccione una máquina</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="elementoSelect">Elemento</label>
+                    <select name="elemento" id="elementoSelect" class="form-control">
+                        <option value="">Seleccione un elemento</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Datos del activo -->
+            <div class="col-md-12 mt-3">
+                <div class="form-group">
+                    <label for="nombre">Nombre del activo</label>
+                    <input type="text" name="nombre" id="nombre" class="form-control" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="descripcion">Descripción</label>
+                    <textarea name="descripcion" id="descripcion" class="form-control"></textarea>
+                </div>
+
+                <div class="form-group">
+                    <label for="modelo">Modelo</label>
+                    <input type="text" name="modelo" id="modelo" class="form-control">
+                </div>
+
+                <div class="form-group">
+                    <label for="numeroSerie">Número de serie</label>
+                    <input type="text" name="numeroSerie" id="numeroSerie" class="form-control">
+                </div>
+
+                <div class="form-group">
+                    <label for="fabricante">Fabricante</label>
+                    <input type="text" name="fabricante" id="fabricante" class="form-control">
+                </div>
+            </div>
+
+            <!-- Botones -->
+            <div class="col-md-12 mt-4">
+                <button type="submit" class="btn btn-primary">Guardar</button>
+                <a href="{{ url_for('verActivos') }}" class="btn btn-secondary">Cancelar</a>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function() {
+    function cargar(url, destino, limpiar = true) {
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (limpiar) destino.innerHTML = '<option value="">Seleccione</option>';
+                data.forEach(opcion => {
+                    const opt = document.createElement('option');
+                    opt.value = opcion.id;
+                    opt.textContent = opcion.nombre;
+                    destino.appendChild(opt);
+                });
+            });
+    }
+
+    const plantaSelect = document.getElementById('plantaSelect');
+    const zonaSelect = document.getElementById('zonaSelect');
+    const lineaSelect = document.getElementById('lineaSelect');
+    const maquinaSelect = document.getElementById('maquinaSelect');
+    const elementoSelect = document.getElementById('elementoSelect');
+
+    cargar('/api/plantas', plantaSelect);
+
+    plantaSelect.addEventListener('change', function() {
+        cargar(`/api/zonas/${this.value}`, zonaSelect);
+    });
+    zonaSelect.addEventListener('change', function() {
+        cargar(`/api/lineas/${this.value}`, lineaSelect);
+    });
+    lineaSelect.addEventListener('change', function() {
+        cargar(`/api/maquinas/${this.value}`, maquinaSelect);
+    });
+    maquinaSelect.addEventListener('change', function() {
+        cargar(`/api/elementos/${this.value}`, elementoSelect);
+    });
+});
+</script>
+
+{% endblock %}

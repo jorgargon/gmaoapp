@@ -1,0 +1,423 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="dashboard">
+    <section class="topSection">
+        <h2>Bienvenido a GMAO JGG</h2>
+        <p class="subtitle">Sistema de Gestión de Mantenimiento</p>
+    </section>
+
+    <!-- Accesos rápidos -->
+    <section class="menuPanel">
+        <div class="menuButtons">
+            <a href="{{ url_for('verActivos') }}" class="dashboardIconButton">
+                <span class="dashboardIconCircle"><i class="fas fa-cogs"></i></span>
+                <span class="buttonLabel">Equipos</span>
+            </a>
+            <a href="{{ url_for('verRecambios') }}" class="dashboardIconButton">
+                <span class="dashboardIconCircle"><i class="fas fa-puzzle-piece"></i></span>
+                <span class="buttonLabel">Recambios</span>
+            </a>
+            <a href="{{ url_for('verOrdenes') }}" class="dashboardIconButton">
+                <span class="dashboardIconCircle"><i class="fas fa-wrench"></i></span>
+                <span class="buttonLabel">Órdenes</span>
+            </a>
+            <a href="{{ url_for('verPreventivo') }}" class="dashboardIconButton">
+                <span class="dashboardIconCircle"><i class="fas fa-shield-alt"></i></span>
+                <span class="buttonLabel">Preventivo</span>
+            </a>
+            {% if current_user and current_user.nivel != 'tecnico' %}
+            <a href="{{ url_for('indicadores.index') }}" class="dashboardIconButton">
+                <span class="dashboardIconCircle"><i class="fas fa-chart-bar"></i></span>
+                <span class="buttonLabel">Informes</span>
+            </a>
+            {% endif %}
+        </div>
+    </section>
+
+
+
+    <!-- Calendario de Órdenes Programadas -->
+    <section class="calendarSection">
+        <div class="calendarCard">
+            <div class="calendarCardHeader">
+                <h3><i class="fas fa-calendar-alt"></i> Calendario de Órdenes Programadas</h3>
+                <div class="calNavBtns">
+                    <button class="btnIcon" onclick="cambiarMesDash(-1)" title="Mes anterior">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <span id="dashMesLabel" class="calMesLabel"></span>
+                    <button class="btnIcon" onclick="cambiarMesDash(1)" title="Mes siguiente">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="calLeyenda">
+                <span class="calLeyItem"><span class="calDot correctivo"></span> Correctivo</span>
+                <span class="calLeyItem"><span class="calDot preventivo"></span> Preventivo</span>
+                <span class="calLeyItem"><span class="calDot otro"></span> Otros</span>
+            </div>
+            <div class="calendarioGrid dashCalGrid" id="dashCalGrid"></div>
+        </div>
+    </section>
+</div>
+
+<style>
+    .calendarSection {
+        margin-top: 1.5rem;
+    }
+
+    .calendarCard {
+        background: var(--card-bg, #fff);
+        border-radius: 12px;
+        border: 1px solid var(--border-color, #e0e0e0);
+        padding: 1.25rem 1.5rem;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, .06);
+    }
+
+    .calendarCardHeader {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: .75rem;
+        flex-wrap: wrap;
+        gap: .5rem;
+    }
+
+    .calendarCardHeader h3 {
+        margin: 0;
+        font-size: 1.05rem;
+        color: var(--text-primary, #222);
+    }
+
+    .calNavBtns {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+    }
+
+    .calMesLabel {
+        font-weight: 600;
+        min-width: 140px;
+        text-align: center;
+        font-size: .95rem;
+        color: var(--text-primary, #333);
+        text-transform: capitalize;
+    }
+
+    .calLeyenda {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: .75rem;
+        flex-wrap: wrap;
+    }
+
+    .calLeyItem {
+        display: flex;
+        align-items: center;
+        gap: .35rem;
+        font-size: .82rem;
+        color: var(--text-muted, #666);
+    }
+
+    .calDot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+
+    .calDot.correctivo {
+        background: #e53935;
+    }
+
+    .calDot.preventivo {
+        background: #43a047;
+    }
+
+    .calDot.otro {
+        background: #1e88e5;
+    }
+
+    /* Override calendarioGrid para dashboard */
+    .dashCalGrid {
+        display: grid;
+        grid-template-columns: repeat(7, 1fr);
+        gap: 4px;
+    }
+
+    .dashCalGrid .calDia {
+        min-height: 45px;
+        border-radius: 6px;
+        padding: 20px 5px 3px 5px;
+        background: var(--input-bg, #f8f9fa);
+        border: 1px solid var(--border-color, #eee);
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+        transition: background .15s;
+        aspect-ratio: auto;
+        /* Desactiva el aspect-ratio: 1 global */
+    }
+
+    .dashCalGrid .calDia.header {
+        min-height: unset;
+        background: none;
+        border: none;
+        text-align: center;
+        font-weight: 600;
+        font-size: .78rem;
+        color: var(--text-muted, #888);
+        padding: 2px 0;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .dashCalGrid .calDia.empty {
+        background: none;
+        border: none;
+    }
+
+    .dashCalGrid .calDia.hoy {
+        background: rgba(25, 118, 210, 0.10);
+        border-color: rgba(25, 118, 210, 0.35);
+    }
+
+    .dashCalGrid .calDia.conOT {
+        cursor: pointer;
+    }
+
+    .dashCalGrid .calDia.conOT:hover {
+        background: var(--hover-bg, #f0f4ff);
+    }
+
+    .calDiaNum {
+        position: absolute;
+        top: 4px;
+        left: 5px;
+        font-size: .8rem;
+        font-weight: 600;
+        color: var(--text-primary, #333);
+        line-height: 1;
+    }
+
+    .dashCalGrid .calDia.hoy .calDiaNum {
+        color: var(--primary, #1976d2);
+        font-weight: 700;
+    }
+
+    .calOTChips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px;
+    }
+
+    .calOTChip {
+        font-size: .7rem;
+        font-weight: 600;
+        padding: 1px 4px;
+        border-radius: 3px;
+        color: #fff;
+        white-space: nowrap;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .calOTChip.correctivo {
+        background: #e53935;
+    }
+
+    .calOTChip.preventivo {
+        background: #43a047;
+    }
+
+    .calOTChip.otro {
+        background: #1e88e5;
+    }
+
+    .calOTMas {
+        font-size: .8rem;
+        color: var(--text-muted, #888);
+        padding: 1px 2px;
+    }
+
+    /* Popup de OTs del día */
+    .otsDiaList {
+        display: flex;
+        flex-direction: column;
+        gap: .5rem;
+    }
+
+    .otsDiaItem {
+        display: flex;
+        align-items: center;
+        gap: .6rem;
+        padding: .5rem .75rem;
+        border-radius: 8px;
+        background: var(--input-bg, #f5f5f5);
+        cursor: pointer;
+        transition: background .15s;
+        text-decoration: none;
+    }
+
+    .otsDiaItem:hover {
+        background: var(--hover-bg, #e3f2fd);
+    }
+
+    .otsDiaBadge {
+        font-size: .7rem;
+        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 12px;
+        color: #fff;
+        white-space: nowrap;
+    }
+
+    .otsDiaBadge.correctivo {
+        background: #e53935;
+    }
+
+    .otsDiaBadge.preventivo {
+        background: #43a047;
+    }
+
+    .otsDiaBadge.otro {
+        background: #1e88e5;
+    }
+
+    .otsDiaInfo {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+    }
+
+    .otsDiaNumero {
+        font-weight: 700;
+        font-size: .82rem;
+        color: var(--text-primary, #222);
+    }
+
+    .otsDiaTitulo {
+        font-size: .78rem;
+        color: var(--text-muted, #666);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+</style>
+
+<script>
+    // ─── Calendario del Dashboard ─────────────────────────────────────────────
+    let dashMesActual = new Date();
+    let dashOrdenesData = [];
+
+    document.addEventListener('DOMContentLoaded', function () {
+        cargarDashCalendario();
+    });
+
+    async function cargarDashCalendario() {
+        try {
+            const resp = await fetch('/api/ordenes-calendario');
+            dashOrdenesData = await resp.json();
+        } catch (e) {
+            dashOrdenesData = [];
+        }
+        renderDashCalendario();
+    }
+
+    function cambiarMesDash(delta) {
+        dashMesActual.setMonth(dashMesActual.getMonth() + delta);
+        renderDashCalendario();
+    }
+
+    function renderDashCalendario() {
+        const grid = document.getElementById('dashCalGrid');
+        const label = document.getElementById('dashMesLabel');
+        const year = dashMesActual.getFullYear();
+        const month = dashMesActual.getMonth();
+
+        const mes = dashMesActual.toLocaleDateString('es-ES', { month: 'long' });
+        const anio = dashMesActual.getFullYear();
+        label.textContent = `${mes.charAt(0).toUpperCase() + mes.slice(1)} ${anio}`;
+
+        const diasSemana = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+        let html = diasSemana.map(d => `<div class="calDia header">${d}</div>`).join('');
+
+        const primerDia = new Date(year, month, 1);
+        let startDay = primerDia.getDay() - 1;
+        if (startDay < 0) startDay = 6;
+
+        const diasMes = new Date(year, month + 1, 0).getDate();
+        const hoy = new Date();
+        hoy.setHours(0, 0, 0, 0);
+
+        for (let i = 0; i < startDay; i++) html += '<div class="calDia empty"></div>';
+
+        for (let day = 1; day <= diasMes; day++) {
+            const fecha = new Date(year, month, day);
+            const y = fecha.getFullYear();
+            const m = String(fecha.getMonth() + 1).padStart(2, '0');
+            const d = String(fecha.getDate()).padStart(2, '0');
+            const fechaStr = `${y}-${m}-${d}`;
+            const esHoy = fecha.toDateString() === hoy.toDateString();
+
+            const ots = dashOrdenesData.filter(o => o.fechaProgramada === fechaStr);
+
+            let clases = 'calDia';
+            if (esHoy) clases += ' hoy';
+            if (ots.length > 0) clases += ' conOT';
+
+            const MAX = 2;
+            const mostrar = ots.slice(0, MAX);
+            const extras = ots.length - MAX;
+
+            let chipsHtml = '';
+            if (ots.length > 0) {
+                chipsHtml = '<div class="calOTChips">';
+                mostrar.forEach(o => {
+                    const cls = o.tipo === 'correctivo' ? 'correctivo' : o.tipo === 'preventivo' ? 'preventivo' : 'otro';
+                    chipsHtml += `<span class="calOTChip ${cls}" title="${o.numero} - ${o.titulo}">${o.numero}</span>`;
+                });
+                if (extras > 0) chipsHtml += `<span class="calOTMas">+${extras}</span>`;
+                chipsHtml += '</div>';
+            }
+
+            const onclick = ots.length > 0 ? `onclick="verOTsDia('${fechaStr}')"` : '';
+            html += `
+                <div class="${clases}" ${onclick}>
+                    <span class="calDiaNum">${day}</span>
+                    ${chipsHtml}
+                </div>`;
+        }
+
+        grid.innerHTML = html;
+    }
+
+    function verOTsDia(fechaStr) {
+        const ots = dashOrdenesData.filter(o => o.fechaProgramada === fechaStr);
+        const fechaFmt = new Date(fechaStr + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long' });
+
+        let html = '<div class="otsDiaList">';
+        ots.forEach(o => {
+            const cls = o.tipo === 'correctivo' ? 'correctivo' : o.tipo === 'preventivo' ? 'preventivo' : 'otro';
+            const tipoLabel = o.tipo.charAt(0).toUpperCase() + o.tipo.slice(1);
+            html += `
+                <div class="otsDiaItem" onclick="closeModal(); window.location.href='/ordenes?ot=${o.id}'">
+                    <span class="otsDiaBadge ${cls}">${tipoLabel}</span>
+                    <div class="otsDiaInfo">
+                        <span class="otsDiaNumero">${o.numero}</span>
+                        <span class="otsDiaTitulo">${o.titulo} — ${o.equipoNombre}</span>
+                    </div>
+                    <i class="fas fa-chevron-right" style="margin-left:auto; color:var(--text-muted,#aaa); font-size:.75rem;"></i>
+                </div>`;
+        });
+        html += '</div>';
+
+        openModal(`Órdenes del ${fechaFmt}`, html,
+            `<button class="btn btnSecondary" onclick="closeModal()">Cerrar</button>`);
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,1827 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="pageHeader">
+    <h2><i class="fas fa-cog"></i> Configuración</h2>
+</div>
+
+<!-- Pestañas de Configuración -->
+<div class="configTabs">
+    <button class="configTabBtn active" onclick="switchConfigTab(event, 'tipos')">
+        <i class="fas fa-tags"></i> Tipos de Intervención
+    </button>
+    <button class="configTabBtn" onclick="switchConfigTab(event, 'gamas')">
+        <i class="fas fa-clipboard-list"></i> Gamas de Mantenimiento
+    </button>
+    {% if current_user and current_user.nivel == 'admin' %}
+    <button class="configTabBtn" onclick="switchConfigTab(event, 'general')">
+        <i class="fas fa-sliders-h"></i> General
+    </button>
+    <button class="configTabBtn" onclick="switchConfigTab(event, 'usuarios')">
+        <i class="fas fa-users"></i> Usuarios
+    </button>
+    {% endif %}
+    {% if current_user and current_user.nivel != 'tecnico' %}
+    <button class="configTabBtn" onclick="switchConfigTab(event, 'tecnicos')">
+        <i class="fas fa-user-cog"></i> Técnicos
+    </button>
+    {% endif %}
+</div>
+
+<!-- Contenido de las Pestañas -->
+
+<!-- Pestaña: Tipos de Intervención -->
+<div id="config-tipos" class="configTabContent" style="display: block;">
+    <div class="filtersBar">
+        <div class="filterGroup">
+            <label class="checkLabel">
+                <input type="checkbox" id="tiposSoloActivos" checked onchange="cargarTiposIntervencion()">
+                <span>Solo activos</span>
+            </label>
+        </div>
+        {% if current_user and current_user.nivel == 'admin' %}
+        <div class="filterGroup" style="margin-left: auto;">
+            <button class="btn btnPrimary" onclick="mostrarFormularioTipo()">
+                <i class="fas fa-plus"></i> Nuevo Tipo
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="tiposContainer">
+        <div id="tiposGrid">
+            <div class="table-responsive">
+                <table class="dataTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;">Icono</th>
+                            <th>Nombre</th>
+                            <th>Código</th>
+                            <th>Descripción</th>
+                            <th>Orden</th>
+                            <th>Estado</th>
+                            <th style="width: 100px;">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tiposTableBody">
+                        <tr>
+                            <td colspan="7" class="text-center">
+                                <div class="loadingState"><i class="fas fa-spinner fa-spin"></i> Cargando tipos...</div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pestaña: Gamas de Mantenimiento -->
+<div id="config-gamas" class="configTabContent" style="display: none;">
+    <div class="filtersBar">
+        <div class="filterGroup">
+            <input type="text" id="buscar" class="formControl" placeholder="Buscar gamas..." onkeyup="cargarGamas()">
+        </div>
+        <div class="filterGroup">
+            <label class="checkLabel">
+                <input type="checkbox" id="soloActivas" checked onchange="cargarGamas()">
+                <span>Solo activas</span>
+            </label>
+        </div>
+        {% if current_user and current_user.nivel == 'admin' %}
+        <div class="filterGroup" style="margin-left: auto;">
+            <button class="btn btnPrimary" onclick="mostrarFormularioGama()">
+                <i class="fas fa-plus"></i> Nueva Gama
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="gamasContainer">
+        <div id="gamasGrid" class="table-responsive">
+            <table class="dataTable">
+                <thead>
+                    <tr>
+                        <th>Código</th>
+                        <th>Tipo</th>
+                        <th>Nombre</th>
+                        <th>Descripción</th>
+                        <th class="text-center" style="width: 80px;">Tareas</th>
+                        <th class="text-center" style="width: 80px;">Recambios</th>
+                        <th class="text-center" style="width: 80px;">Asign.</th>
+                        <th class="text-center" style="width: 80px;">Checklist</th>
+                        <th style="width: 100px;">Tiempo</th>
+                        <th>Estado</th>
+                        <th style="width: 80px;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="gamasTableBody">
+                    <tr>
+                        <td colspan="9" class="text-center">
+                            <div class="loadingState"><i class="fas fa-spinner fa-spin"></i> Cargando gamas...</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Pestaña: General -->
+<div id="config-general" class="configTabContent" style="display: none;">
+    <div id="configGeneralContainer" style="max-width: 600px;">
+        <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: .93rem;">
+            <i class="fas fa-info-circle"></i> Ajustes globales de la aplicación. Los cambios se aplican de forma
+            inmediata.
+        </p>
+        <div id="configGeneralSettings">
+            <div class="loadingState"><i class="fas fa-spinner fa-spin"></i> Cargando configuración...</div>
+        </div>
+        <div style="margin-top: 1.5rem;">
+            <button class="btn btnPrimary" onclick="guardarConfigGeneral()">
+                <i class="fas fa-save"></i> Guardar Configuración
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Pestaña: Usuarios -->
+<div id="config-usuarios" class="configTabContent" style="display: none;">
+    <div class="filtersBar">
+        <div class="filterGroup">
+            <label class="checkLabel">
+                <input type="checkbox" id="usuariosSoloActivos" onchange="cargarUsuarios()">
+                <span>Solo activos</span>
+            </label>
+        </div>
+        <div class="filterGroup" style="margin-left: auto;">
+            <button class="btn btnPrimary" onclick="mostrarFormularioUsuario()">
+                <i class="fas fa-plus"></i> Nuevo Usuario
+            </button>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="dataTable">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Usuario (Login)</th>
+                    <th>Nivel</th>
+                    <th>Técnico vinculado</th>
+                    <th>Estado</th>
+                    <th style="width: 100px;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody id="usuariosTableBody">
+                <tr>
+                    <td colspan="6" class="text-center">
+                        <div class="loadingState"><i class="fas fa-spinner fa-spin"></i> Cargando...</div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+
+<!-- Pestaña: Técnicos -->
+<div id="config-tecnicos" class="configTabContent" style="display: none;">
+    <div class="filtersBar">
+        <div class="filterGroup">
+            <label class="checkLabel">
+                <input type="checkbox" id="tecnicosSoloActivos" checked onchange="cargarTecnicos()">
+                <span>Solo activos</span>
+            </label>
+        </div>
+        {% if current_user and current_user.nivel == 'admin' %}
+        <div class="filterGroup" style="margin-left: auto;">
+            <button class="btn btnPrimary" onclick="mostrarFormularioTecnico()">
+                <i class="fas fa-plus"></i> Nuevo Técnico
+            </button>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="tecnicosContainer">
+        <div id="tecnicosGrid" class="table-responsive">
+            <table class="dataTable">
+                <thead>
+                    <tr>
+                        <th>Nombre</th>
+                        <th>Apellidos</th>
+                        <th>Especialidad</th>
+                        <th>Teléfono</th>
+                        <th>Tipo</th>
+                        <th>Coste/Hora</th>
+                        <th>Estado</th>
+                        <th style="width: 100px;">Acciones</th>
+                    </tr>
+
+                </thead>
+                <tbody id="tecnicosTableBody">
+                    <tr>
+                        <td colspan="8" class="text-center">
+                            <div class="loadingState"><i class="fas fa-spinner fa-spin"></i> Cargando técnicos...</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // =========================================================================
+    // GESTIÓN DE PESTAÑAS
+    // =========================================================================
+
+    function switchConfigTab(event, tabName) {
+        // Remover clase active de todos los botones y contenidos
+        document.querySelectorAll('.configTabBtn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.configTabContent').forEach(content => content.style.display = 'none');
+
+        // Activar el botón y contenido seleccionado
+        event.currentTarget.classList.add('active');
+        document.getElementById(`config-${tabName}`).style.display = 'block';
+
+        // Cargar datos específicos si es necesario
+        if (tabName === 'tipos') {
+            cargarTiposIntervencion();
+        } else if (tabName === 'gamas') {
+            cargarGamas();
+        } else if (tabName === 'tecnicos') {
+            cargarTecnicos();
+        } else if (tabName === 'general') {
+            cargarConfigGeneral();
+        } else if (tabName === 'usuarios') {
+            cargarUsuarios();
+        }
+    }
+
+    // Activar la primera pestaña por defecto (Tipos de Intervención) y cargar datos
+    document.addEventListener('DOMContentLoaded', function () {
+        console.log('DOM cargado, iniciando configuración...');
+        // Asegurar que la primera pestaña esté activa
+        const firstTab = document.querySelector('.configTabBtn');
+        if (firstTab && !firstTab.classList.contains('active')) {
+            firstTab.classList.add('active');
+            document.getElementById('config-tipos').style.display = 'block';
+        }
+        cargarTiposIntervencion();
+    });
+
+    // =========================================================================
+    // GESTIÓN DE TIPOS DE INTERVENCIÓN
+    // =========================================================================
+
+    let tiposData = [];
+    let iconosDisponibles = [];
+
+    async function cargarTiposIntervencion() {
+        try {
+            const soloActivos = document.getElementById('tiposSoloActivos').checked;
+            console.log('Cargando tipos...');
+            tiposData = await apiCall(`/api/tipos-intervencion?activo=${soloActivos}`);
+            console.log('Tipos cargados:', tiposData);
+            renderTipos();
+        } catch (error) {
+            console.error('Error cargando tipos:', error);
+            showToast('Error al cargar tipos', 'error');
+        }
+    }
+
+    function renderTipos() {
+        const container = document.getElementById('tiposTableBody');
+        if (!container) return; // Seguridad
+
+        if (tiposData.length === 0) {
+            container.innerHTML = '<tr><td colspan="7" class="emptyState"><i class="fas fa-tags"></i><p>No hay tipos de intervención</p></td></tr>';
+            return;
+        }
+
+        let html = '';
+        tiposData.forEach(t => {
+            html += `
+            <tr onclick="verTipo(${t.id})" style="cursor: pointer;">
+                <td class="text-center">
+                    <div class="tipoIcon" style="color: ${t.color}; font-size: 1.2em;">
+                        <i class="fas ${t.icono}"></i>
+                    </div>
+                </td>
+                <td><strong>${t.nombre}</strong></td>
+                <td><span class="text-muted small">${t.codigo}</span></td>
+                <td><span class="text-muted small">${t.descripcion || '-'}</span></td>
+                <td>${t.orden}</td>
+                <td><span class="tag ${t.activo ? 'tag-success' : 'tag-muted'}">${t.activo ? 'Activo' : 'Inactivo'}</span></td>
+                <td class="actionsCell">
+                    <button class="btnIcon" onclick="event.stopPropagation(); editarTipo(${t.id})" title="Editar">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btnIcon btnDanger" onclick="event.stopPropagation(); eliminarTipo(${t.id})" title="Eliminar">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    async function mostrarFormularioTipo(tipo = null) {
+        const esEdicion = tipo !== null;
+
+        // Cargar iconos disponibles
+        try {
+            iconosDisponibles = await apiCall('/api/iconos-disponibles');
+            // Si estamos editando, añadir el icono actual a la lista
+            if (esEdicion && tipo.icono) {
+                const iconoActual = { icono: tipo.icono, nombre: tipo.icono };
+                if (!iconosDisponibles.find(i => i.icono === tipo.icono)) {
+                    iconosDisponibles.unshift(iconoActual);
+                }
+            }
+        } catch (e) { iconosDisponibles = []; }
+
+        const iconosOptions = iconosDisponibles.map(i =>
+            `<option value="${i.icono}" ${tipo?.icono === i.icono ? 'selected' : ''}>${i.nombre}</option>`
+        ).join('');
+
+        const html = `
+        <form id="formTipo" onsubmit="event.preventDefault(); guardandoTipo ? null : guardarTipo(document.getElementById('tipoCodigo').value ? document.getElementById('tipoCodigo').value : null); return false;">
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Nombre *</label>
+                    <input type="text" id="tipoNombre" class="formControl" value="${tipo?.nombre || ''}" 
+                           placeholder="Ej: Correctivo" required>
+                </div>
+                <div class="formGroup">
+                    <label>Código</label>
+                    <input type="text" id="tipoCodigo" class="formControl" value="${tipo?.codigo || ''}" 
+                           placeholder="Se genera automáticamente" ${esEdicion ? 'readonly' : ''}>
+                </div>
+            </div>
+            <div class="formGroup">
+                <label>Descripción</label>
+                <textarea id="tipoDescripcion" class="formControl" rows="2">${tipo?.descripcion || ''}</textarea>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Icono *</label>
+                    <select id="tipoIcono" class="formControl" required onchange="previewIcono()">
+                        <option value="">Seleccionar icono...</option>
+                        ${iconosOptions}
+                    </select>
+                </div>
+                <div class="formGroup" style="flex: 0 0 60px;">
+                    <label>&nbsp;</label>
+                    <div id="iconoPreview" class="iconoPreview">
+                        ${tipo?.icono ? `<i class="fas ${tipo.icono}"></i>` : '<i class="fas fa-question"></i>'}
+                    </div>
+                </div>
+                <div class="formGroup">
+                    <label>Color</label>
+                    <input type="color" id="tipoColor" class="formControl formColorInput" value="${tipo?.color || '#1976d2'}">
+                </div>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Orden</label>
+                    <input type="number" id="tipoOrden" class="formControl" value="${tipo?.orden || 0}" min="0">
+                </div>
+                <div class="formGroup">
+                    <label>Estado</label>
+                    <select id="tipoActivo" class="formControl">
+                        <option value="true" ${tipo?.activo !== false ? 'selected' : ''}>Activo</option>
+                        <option value="false" ${tipo?.activo === false ? 'selected' : ''}>Inactivo</option>
+                    </select>
+                </div>
+            </div>
+        </form>
+    `;
+
+        const footer = `
+        <button class="btn btnSecondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn btnPrimary" onclick="guardarTipo(${tipo?.id || 'null'})">${esEdicion ? 'Guardar' : 'Crear Tipo'}</button>
+    `;
+
+        openModal(esEdicion ? 'Editar Tipo de Intervención' : 'Nuevo Tipo de Intervención', html, footer);
+    }
+
+    function previewIcono() {
+        const icono = document.getElementById('tipoIcono').value;
+        const color = document.getElementById('tipoColor').value;
+        document.getElementById('iconoPreview').innerHTML = icono ?
+            `<i class="fas ${icono}" style="color: ${color};"></i>` :
+            '<i class="fas fa-question"></i>';
+    }
+
+    async function guardarTipo(id) {
+        const data = {
+            nombre: document.getElementById('tipoNombre').value,
+            codigo: document.getElementById('tipoCodigo').value,
+            descripcion: document.getElementById('tipoDescripcion').value,
+            icono: document.getElementById('tipoIcono').value,
+            color: document.getElementById('tipoColor').value,
+            orden: parseInt(document.getElementById('tipoOrden').value) || 0,
+            activo: document.getElementById('tipoActivo').value === 'true'
+        };
+
+        if (!data.nombre || !data.icono) {
+            showToast('Completa los campos obligatorios', 'error');
+            return;
+        }
+
+        try {
+            if (id) {
+                await apiCall(`/api/tipo-intervencion/${id}`, 'PUT', data);
+                showToast('Tipo actualizado', 'success');
+            } else {
+                await apiCall('/api/tipo-intervencion', 'POST', data);
+                showToast('Tipo creado correctamente', 'success');
+            }
+            closeModal();
+            cargarTiposIntervencion();
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    async function verTipo(id) {
+        const t = await apiCall(`/api/tipo-intervencion/${id}`);
+
+        const html = `
+        <div class="tipoDetalle">
+            <div class="tipoDetalleHeader" style="background-color: ${t.color}20;">
+                <div class="tipoDetalleIcon" style="color: ${t.color};">
+                    <i class="fas ${t.icono} fa-3x"></i>
+                </div>
+                <div>
+                    <h3>${t.nombre}</h3>
+                    <span class="tipoCodigo">${t.codigo}</span>
+                </div>
+            </div>
+            <div class="infoGrid" style="margin-top: 20px;">
+                <div class="infoItem full">
+                    <label>Descripción</label>
+                    <span>${t.descripcion || '-'}</span>
+                </div>
+                <div class="infoItem">
+                    <label>Estado</label>
+                    <span class="tag ${t.activo ? 'tag-success' : 'tag-muted'}">${t.activo ? 'Activo' : 'Inactivo'}</span>
+                </div>
+                <div class="infoItem">
+                    <label>Orden</label>
+                    <span>${t.orden}</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+        const footer = `
+        <button class="btn btnOutline" onclick="closeModal(); editarTipo(${t.id})">
+            <i class="fas fa-edit"></i> Editar
+        </button>
+        <button class="btn btnSecondary" onclick="closeModal()">Cerrar</button>
+    `;
+
+        openModal(t.nombre, html, footer);
+    }
+
+    async function editarTipo(id) {
+        const tipo = await apiCall(`/api/tipo-intervencion/${id}`);
+        mostrarFormularioTipo(tipo);
+    }
+
+    async function eliminarTipo(id) {
+        const tipo = tiposData.find(t => t.id === id);
+        if (!confirm(`¿Eliminar el tipo "${tipo?.nombre}"?`)) return;
+
+        try {
+            const result = await apiCall(`/api/tipo-intervencion/${id}`, 'DELETE');
+            cargarTiposIntervencion();
+            showToast(result.mensaje, result.desactivado ? 'warning' : 'success');
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    // =========================================================================
+    // GESTIÓN DE GAMAS (código reutilizado de gamas.html)
+    // =========================================================================
+
+    let gamasData = [];
+
+    async function cargarGamas() {
+        try {
+            const activo = document.getElementById('soloActivas').checked;
+            const buscar = document.getElementById('buscar').value;
+            let url = `/api/gamas?activo=${activo}`;
+            if (buscar) url += `&buscar=${encodeURIComponent(buscar)}`;
+
+            console.log('Cargando gamas desde:', url);
+            gamasData = await apiCall(url);
+            console.log('Gamas cargadas:', gamasData);
+            renderGamas();
+        } catch (error) {
+            console.error('Error cargando gamas:', error);
+            showToast('Error al cargar gamas: ' + error.message, 'error');
+        }
+    }
+
+    function renderGamas() {
+        const container = document.getElementById('gamasTableBody');
+        if (!container) return; // Seguridad
+
+        if (gamasData.length === 0) {
+            container.innerHTML = '<tr><td colspan="9" class="emptyState"><i class="fas fa-clipboard-list"></i><p>No hay gamas de mantenimiento</p></td></tr>';
+            return;
+        }
+
+        let html = '';
+        gamasData.forEach(g => {
+            const statusClass = g.activo ? 'tag-success' : 'tag-muted';
+            const statusText = g.activo ? 'Activa' : 'Inactiva';
+
+            html += `
+            <tr onclick="verGama(${g.id})" style="cursor: pointer;">
+                <td><strong>${g.codigo}</strong></td>
+                <td><span class="tag ${g.tipo === 'tecnico_legal' ? 'tag-warning' : 'tag-info'}">${g.tipo === 'tecnico_legal' ? 'Técnico-Legal' : 'Preventivo'}</span></td>
+                <td>${g.nombre}</td>
+                <td><span class="text-muted small">${g.descripcion || '-'}</span></td>
+                <td class="text-center"><span class="badge badge-info">${g.numTareas}</span></td>
+                <td class="text-center"><span class="badge badge-warning">${g.numRecambios}</span></td>
+                <td class="text-center"><span class="badge badge-primary">${g.numAsignaciones}</span></td>
+                <td class="text-center"><span class="badge badge-info"><i class="fas fa-clipboard-check"></i> ${g.numChecklist || 0}</span></td>
+                <td>${g.tiempoEstimado ? g.tiempoEstimado + ' min' : '-'}</td>
+                <td><span class="tag ${statusClass}">${statusText}</span></td>
+                <td>
+                    <div class="actionButtons">
+                        <button class="btnIcon" onclick="event.stopPropagation(); verGama(${g.id})" title="Ver Detalle/Editar">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    async function mostrarFormularioGama(gama = null) {
+        const esEdicion = gama !== null;
+
+        const html = `
+        <form id="formGama" onsubmit="event.preventDefault(); return false;">
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Código</label>
+                    <input type="text" id="gamaCodigo" class="formControl" value="${gama ? gama.codigo : ''}" 
+                           placeholder="Autogenerado" readonly>
+                </div>
+                <div class="formGroup">
+                    <label>Tipo *</label>
+                    <select id="gamaTipo" class="formControl" ${esEdicion ? 'disabled' : ''}>
+                        <option value="preventivo" ${gama && gama.tipo === 'tecnico_legal' ? '' : 'selected'}>Preventivo</option>
+                        <option value="tecnico_legal" ${gama && gama.tipo === 'tecnico_legal' ? 'selected' : ''}>Técnico-Legal</option>
+                    </select>
+                </div>
+                <div class="formGroup">
+                    <label>Estado</label>
+                    <select id="gamaActivo" class="formControl">
+                        <option value="true" ${(gama && gama.activo !== false) ? 'selected' : ''}>Activa</option>
+                        <option value="false" ${(gama && gama.activo === false) ? 'selected' : ''}>Inactiva</option>
+                    </select>
+                </div>
+            </div>
+            <div class="formGroup">
+                <label>Nombre *</label>
+                <input type="text" id="gamaNombre" class="formControl" value="${gama ? gama.nombre : ''}" 
+                       placeholder="Nombre descriptivo de la gama" required>
+            </div>
+            <div class="formGroup">
+                <label>Descripción</label>
+                <textarea id="gamaDescripcion" class="formControl" rows="3">${gama ? (gama.descripcion || '') : ''}</textarea>
+            </div>
+            <div class="formGroup">
+                <label>Tiempo Estimado (minutos)</label>
+                <input type="number" id="gamaTiempoEstimado" class="formControl" value="${gama ? (gama.tiempoEstimado || '') : ''}" min="0">
+            </div>
+        </form>
+    `;
+
+        const footer = `
+        <button class="btn btnSecondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn btnPrimary" onclick="guardarGama(${gama ? gama.id : 'null'})">${esEdicion ? 'Guardar' : 'Crear Gama'}</button>
+    `;
+
+        openModal(esEdicion ? 'Editar Gama' : 'Nueva Gama de Mantenimiento', html, footer);
+    }
+
+    async function guardarGama(id) {
+        const data = {
+            codigo: document.getElementById('gamaCodigo').value,
+            tipo: document.getElementById('gamaTipo').value,
+            nombre: document.getElementById('gamaNombre').value,
+            descripcion: document.getElementById('gamaDescripcion').value,
+            tiempoEstimado: parseInt(document.getElementById('gamaTiempoEstimado').value) || null,
+            activo: document.getElementById('gamaActivo').value === 'true'
+        };
+
+        if (!data.nombre) {
+            showToast('Completa los campos obligatorios', 'error');
+            return;
+        }
+
+        try {
+            if (id) {
+                await apiCall(`/api/gama/${id}`, 'PUT', data);
+                showToast('Gama actualizada', 'success');
+                closeModal();
+                cargarGamas();
+            } else {
+                const result = await apiCall('/api/gama', 'POST', data);
+                showToast('Gama creada. Ahora puedes añadir tareas y recambios.', 'success');
+                closeModal();
+                // Abrir automáticamente la vista de detalle para añadir tareas y recambios
+                setTimeout(() => {
+                    verGama(result.id);
+                    cargarGamas();
+                }, 300);
+            }
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    async function verGama(id) {
+        const g = await apiCall(`/api/gama/${id}`);
+
+        let html = `
+        <div class="gamaDetalle">
+            <div class="infoGrid">
+                <div class="infoItem">
+                    <label>Código</label>
+                    <span class="codigoTag">${g.codigo}</span>
+                </div>
+                <div class="infoItem">
+                    <label>Tipo</label>
+                    <span class="tag ${g.tipo === 'tecnico_legal' ? 'tag-warning' : 'tag-info'}">${g.tipo === 'tecnico_legal' ? 'Técnico-Legal' : 'Preventivo'}</span>
+                </div>
+                <div class="infoItem">
+                    <label>Estado</label>
+                    <span class="tag ${g.activo ? 'tag-success' : 'tag-muted'}">${g.activo ? 'Activa' : 'Inactiva'}</span>
+                </div>
+                <div class="infoItem full">
+                    <label>Nombre</label>
+                    <span>${g.nombre}</span>
+                </div>
+                <div class="infoItem full">
+                    <label>Descripción</label>
+                    <span>${g.descripcion || '-'}</span>
+                </div>
+                <div class="infoItem">
+                    <label>Tiempo Estimado</label>
+                    <span>${g.tiempoEstimado ? g.tiempoEstimado + ' min' : '-'}</span>
+                </div>
+                <div class="infoItem">
+                    <label>Creación</label>
+                    <span>${g.fechaCreacion ? new Date(g.fechaCreacion).toLocaleDateString('es-ES') : '-'}</span>
+                </div>
+            </div>
+
+            <!-- Pestañas -->
+            <div class="tabs">
+                <button class="tabBtn active" onclick="switchTab(event, 'tareas')">
+                    <i class="fas fa-tasks"></i> Tareas (${g.tareas.length})
+                </button>
+                <button class="tabBtn" onclick="switchTab(event, 'recambios')">
+                    <i class="fas fa-box"></i> Recambios (${g.recambios.length})
+                </button>
+                <button class="tabBtn" onclick="switchTab(event, 'asignaciones')">
+                    <i class="fas fa-link"></i> Asignaciones (${g.asignaciones.length})
+                </button>
+                <button class="tabBtn" onclick="switchTab(event, 'checklist')">
+                    <i class="fas fa-clipboard-check"></i> Checklist (${g.checklistItems ? g.checklistItems.length : 0})
+                </button>
+            </div>
+
+            <!-- Pestaña Tareas -->
+            <div id="tab-tareas" class="tabContent active">
+                <div class="sectionHeader">
+                    <h4><i class="fas fa-tasks"></i> Tareas de Mantenimiento</h4>
+                    <button class="btn btnSm btnPrimary" onclick="agregarTarea(${g.id})">
+                        <i class="fas fa-plus"></i> Añadir Tarea
+                    </button>
+                </div>
+                <div id="tareasLista">
+                    ${g.tareas && g.tareas.length > 0 ? `
+                        <ol class="tareasList">
+                            ${g.tareas.map(t => `
+                                <li>
+                                    <div class="tareaItem">
+                                        <div class="tareaDesc">${t.descripcion}</div>
+                                        ${t.duracionEstimada ? `<span class="tareaDuracion">${t.duracionEstimada} min</span>` : ''}
+                                        ${t.herramientas ? `<div class="tareaHerramientas"><i class="fas fa-tools"></i> ${t.herramientas}</div>` : ''}
+                                        <button class="btnIcon btnDanger" onclick="event.stopPropagation(); eliminarTarea(${g.id}, ${t.id})" title="Eliminar">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </li>
+                            `).join('')}
+                        </ol>
+                    ` : '<p class="emptyState small">Sin tareas definidas</p>'}
+                </div>
+            </div>
+
+            <!-- Pestaña Recambios -->
+            <div id="tab-recambios" class="tabContent">
+                <div class="sectionHeader">
+                    <h4><i class="fas fa-box"></i> Recambios Necesarios</h4>
+                    <button class="btn btnSm btnPrimary" onclick="agregarRecambio(${g.id})">
+                        <i class="fas fa-plus"></i> Añadir Recambio
+                    </button>
+                </div>
+                <div id="recambiosLista">
+                    ${g.recambios && g.recambios.length > 0 ? `
+                        <table class="dataTable">
+                            <thead>
+                                <tr>
+                                    <th>Código</th>
+                                    <th>Recambio</th>
+                                    <th>Cantidad</th>
+                                    <th>Observaciones</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${g.recambios.map(r => `
+                                    <tr>
+                                        <td>${r.recambioCodigo}</td>
+                                        <td>${r.recambioNombre}</td>
+                                        <td>${r.cantidad}</td>
+                                        <td>${r.observaciones || '-'}</td>
+                                        <td>
+                                            <button class="btnIcon btnDanger" onclick="eliminarRecambio(${g.id}, ${r.id})" title="Eliminar">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    ` : '<p class="emptyState small">Sin recambios definidos</p>'}
+                </div>
+            </div>
+
+            <!-- Pestaña Asignaciones -->
+            <div id="tab-asignaciones" class="tabContent">
+                <div class="sectionHeader">
+                    <h4><i class="fas fa-link"></i> Equipos Asignados</h4>
+                    <button class="btn btnSm btnPrimary" onclick="asignarGamaAEquipo(${g.id})">
+                        <i class="fas fa-plus"></i> Asignar a Equipo
+                    </button>
+                </div>
+                <div id="asignacionesLista">
+                    ${g.asignaciones && g.asignaciones.length > 0 ? `
+                        <table class="dataTable">
+                            <thead>
+                                <tr>
+                                    <th>Equipo</th>
+                                    <th>Frecuencia</th>
+                                    <th>Próxima Ejecución</th>
+                                    <th>Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${g.asignaciones.map(a => `
+                                    <tr>
+                                        <td>${a.equipoNombre}</td>
+                                        <td>Cada ${a.frecuenciaValor} ${formatFrecuencia(a.frecuenciaTipo)}</td>
+                                        <td>${a.proximaEjecucion ? new Date(a.proximaEjecucion).toLocaleDateString('es-ES') : '-'}</td>
+                                        <td><span class="tag ${a.activo ? 'tag-success' : 'tag-muted'}">${a.activo ? 'Activa' : 'Inactiva'}</span></td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    ` : '<p class="emptyState small">No hay equipos asignados</p>'}
+                </div>
+            </div>
+
+            <!-- Pestaña Checklist -->
+            <div id="tab-checklist" class="tabContent">
+                <div class="sectionHeader">
+                    <h4><i class="fas fa-clipboard-check"></i> Items de Verificación (Checklist)</h4>
+                    <button class="btn btnSm btnPrimary" onclick="agregarChecklistItem(${g.id})">
+                        <i class="fas fa-plus"></i> Añadir Item
+                    </button>
+                </div>
+                <div style="margin-bottom: 12px; background: #fff8e1; color: #f57f17; padding: 10px; border-radius: 4px; font-size: 0.9em;">
+                    <i class="fas fa-info-circle"></i> Los items de checklist se solicitan al operario durante la ejecución de una Orden de Trabajo Preventiva. Si un item marcado para generar correctivo recibe un NOK o fallo, se creará automáticamente una OT Correctiva al cerrar la OT actual.
+                </div>
+                <div id="checklistLista">
+                    ${(function () {
+                const gamaIdLocal = g.id;
+                if (!g.checklistItems || g.checklistItems.length === 0) {
+                    return '<p class="emptyState small">Sin items de checklist definidos</p>';
+                }
+                let rows = g.checklistItems.map(function (ci) {
+                    const unidadStr = ci.unidad ? ' (' + ci.unidad + ')' : '';
+                    const correctivoTag = ci.generaCorrectivo
+                        ? '<span class="tag tag-warning"><i class="fas fa-bolt"></i> Sí</span>'
+                        : '<span class="tag tag-muted">No</span>';
+                    return '<tr>' +
+                        '<td><strong>' + ci.orden + '</strong></td>' +
+                        '<td>' + ci.descripcion + '</td>' +
+                        '<td>' + formatTipoRespuesta(ci.tipoRespuesta) + unidadStr + '</td>' +
+                        '<td>' + correctivoTag + '</td>' +
+                        '<td><button class="btnIcon btnDanger" onclick="event.stopPropagation(); eliminarChecklistItem(' + gamaIdLocal + ', ' + ci.id + ')" title="Eliminar"><i class="fas fa-trash"></i></button></td>' +
+                        '</tr>';
+                });
+                return '<table class="dataTable"><thead><tr><th>#</th><th>Descripción</th><th>Tipo Respuesta</th><th>Genera Correctivo</th><th>Acciones</th></tr></thead><tbody>' + rows.join('') + '</tbody></table>';
+            })()}
+                </div>
+            </div>
+        </div>
+    `;
+
+        const footer = `
+        <button class="btn btnOutline" onclick="closeModal(); editarGama(${g.id})">
+            <i class="fas fa-edit"></i> Editar
+        </button>
+        <button class="btn btnSecondary" onclick="closeModal()">Cerrar</button>
+    `;
+
+        openModal(`Gama: ${g.nombre}`, html, footer);
+    }
+
+    function switchTab(event, tabName) {
+        // Remover clase active de todos los botones y contenidos
+        document.querySelectorAll('.tabBtn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tabContent').forEach(content => content.classList.remove('active'));
+
+        // Activar el botón y contenido seleccionado
+        event.currentTarget.classList.add('active');
+        document.getElementById(`tab-${tabName}`).classList.add('active');
+    }
+
+    async function editarGama(id) {
+        const gama = await apiCall(`/api/gama/${id}`);
+        mostrarFormularioGama(gama);
+    }
+
+    function agregarTarea(gamaId) {
+        const html = `
+        <form id="formTarea" onsubmit="event.preventDefault(); return false;">
+            <div class="formGroup">
+                <label>Descripción de la Tarea *</label>
+                <textarea id="tareaDesc" class="formControl" rows="3" 
+                          placeholder="Describa la tarea a realizar" required></textarea>
+            </div>
+            <div class="formGroup">
+                <label>Duración Estimada (min)</label>
+                <input type="number" id="tareaDuracion" class="formControl" min="0">
+            </div>
+            <div class="formGroup">
+                <label>Herramientas Necesarias</label>
+                <input type="text" id="tareaHerramientas" class="formControl" placeholder="Ej: Llave 10mm, destornillador...">
+            </div>
+            <div class="formGroup">
+                <label>Instrucciones Adicionales</label>
+                <textarea id="tareaInstrucciones" class="formControl" rows="2"></textarea>
+            </div>
+        </form>
+    `;
+
+        const footer = `
+        <button class="btn btnSecondary" onclick="closeModal(); verGama(${gamaId})">Cancelar</button>
+        <button class="btn btnPrimary" onclick="guardarTarea(${gamaId})">Añadir Tarea</button>
+    `;
+
+        openModal('Nueva Tarea', html, footer);
+    }
+
+    async function guardarTarea(gamaId) {
+        const data = {
+            descripcion: document.getElementById('tareaDesc').value,
+            duracionEstimada: parseInt(document.getElementById('tareaDuracion').value) || null,
+            herramientas: document.getElementById('tareaHerramientas').value,
+            instrucciones: document.getElementById('tareaInstrucciones').value
+        };
+
+        if (!data.descripcion.trim()) {
+            showToast('La descripción es obligatoria', 'error');
+            return;
+        }
+
+        try {
+            await apiCall(`/api/gama/${gamaId}/tarea`, 'POST', data);
+            closeModal();
+            verGama(gamaId);
+            showToast('Tarea añadida', 'success');
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    async function eliminarTarea(gamaId, tareaId) {
+        if (!confirm('¿Eliminar esta tarea?')) return;
+
+        try {
+            await apiCall(`/api/gama/${gamaId}/tarea/${tareaId}`, 'DELETE');
+            verGama(gamaId);
+            showToast('Tarea eliminada', 'success');
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    async function agregarRecambio(gamaId) {
+        // Cargar lista de recambios
+        let recambiosOptions = '<option value="">Seleccionar recambio...</option>';
+        try {
+            const recambios = await apiCall('/api/recambios?activo=true');
+            recambios.forEach(r => {
+                recambiosOptions += `<option value="${r.id}">${r.codigo} - ${r.nombre}</option>`;
+            });
+        } catch (e) {
+            console.error(e);
+        }
+
+        const html = `
+        <form id="formRecambio" onsubmit="event.preventDefault(); return false;">
+            <div class="formGroup">
+                <label>Recambio *</label>
+                <select id="recambioId" class="formControl" required>
+                    ${recambiosOptions}
+                </select>
+            </div>
+            <div class="formGroup">
+                <label>Cantidad *</label>
+                <input type="number" id="recambioCantidad" class="formControl" step="any" value="1" min="0" required>
+            </div>
+            <div class="formGroup">
+                <label>Observaciones</label>
+                <textarea id="recambioObs" class="formControl" rows="2"></textarea>
+            </div>
+        </form>
+    `;
+
+        const footer = `
+        <button class="btn btnSecondary" onclick="closeModal(); verGama(${gamaId})">Cancelar</button>
+        <button class="btn btnPrimary" onclick="guardarRecambio(${gamaId})">Añadir Recambio</button>
+    `;
+
+        openModal('Añadir Recambio', html, footer);
+    }
+
+    async function guardarRecambio(gamaId) {
+        const data = {
+            recambioId: parseInt(document.getElementById('recambioId').value),
+            cantidad: parseFloat(document.getElementById('recambioCantidad').value),
+            observaciones: document.getElementById('recambioObs').value
+        };
+
+        if (!data.recambioId) {
+            showToast('Selecciona un recambio', 'error');
+            return;
+        }
+
+        try {
+            await apiCall(`/api/gama/${gamaId}/recambio`, 'POST', data);
+            closeModal();
+            verGama(gamaId);
+            showToast('Recambio añadido', 'success');
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    async function eliminarRecambio(gamaId, recambioGamaId) {
+        if (!confirm('¿Eliminar este recambio?')) return;
+
+        try {
+            await apiCall(`/api/gama/${gamaId}/recambio/${recambioGamaId}`, 'DELETE');
+            verGama(gamaId);
+            showToast('Recambio eliminado', 'success');
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    async function asignarGamaAEquipo(gamaId) {
+        // Cargar lista de equipos
+        let equiposOptions = '<option value="">Seleccionar equipo...</option>';
+        try {
+            const equipos = await apiCall('/api/equipos-lista');
+            equipos.forEach(e => {
+                const indent = '─'.repeat(e.nivel);
+                const prefix = e.nivel > 0 ? `${indent} ` : '';
+                equiposOptions += `<option value="${e.tipo}:${e.id}">${prefix}${e.icono} ${e.nombre}</option>`;
+            });
+        } catch (e) {
+            console.error(e);
+        }
+
+        const html = `
+        <form id="formAsignacion" onsubmit="event.preventDefault(); return false;">
+            <div class="formGroup">
+                <label>Equipo *</label>
+                <select id="asigEquipo" class="formControl equipoSelect" required>
+                    ${equiposOptions}
+                </select>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Frecuencia *</label>
+                    <input type="number" id="asigFrecValor" class="formControl" value="30" min="1" required>
+                </div>
+                <div class="formGroup">
+                    <label>Unidad *</label>
+                    <select id="asigFrecTipo" class="formControl">
+                        <option value="dias">Días</option>
+                        <option value="semanas">Semanas</option>
+                        <option value="meses">Meses</option>
+                        <option value="horas">Horas</option>
+                    </select>
+                </div>
+            </div>
+        </form>
+    `;
+
+        const footer = `
+        <button class="btn btnSecondary" onclick="closeModal(); verGama(${gamaId})">Cancelar</button>
+        <button class="btn btnPrimary" onclick="guardarAsignacion(${gamaId})">Asignar</button>
+    `;
+
+        openModal('Asignar Gama a Equipo', html, footer);
+    }
+
+    async function guardarAsignacion(gamaId) {
+        const equipoValue = document.getElementById('asigEquipo').value;
+        const [equipoTipo, equipoId] = equipoValue ? equipoValue.split(':') : [null, null];
+
+        const data = {
+            gamaId: gamaId,
+            equipoTipo: equipoTipo,
+            equipoId: parseInt(equipoId),
+            frecuenciaValor: parseInt(document.getElementById('asigFrecValor').value),
+            frecuenciaTipo: document.getElementById('asigFrecTipo').value
+        };
+
+        if (!equipoValue) {
+            showToast('Selecciona un equipo', 'error');
+            return;
+        }
+
+        try {
+            await apiCall('/api/asignacion', 'POST', data);
+            closeModal();
+            verGama(gamaId);
+            showToast('Gama asignada correctamente', 'success');
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    function formatFrecuencia(tipo) {
+        const nombres = {
+            'dias': 'días',
+            'semanas': 'semanas',
+            'meses': 'meses',
+            'horas': 'horas'
+        };
+        return nombres[tipo] || tipo;
+    }
+
+    // =========================================================================
+    // GESTIÓN DE CHECKLIST (GAMAS)
+    // =========================================================================
+
+    function formatTipoRespuesta(tipo) {
+        const nombres = {
+            'ok_nok': 'OK / NOK',
+            'numerico': 'Valor Numérico',
+            'texto': 'Texto Libre'
+        };
+        return nombres[tipo] || tipo;
+    }
+
+    function agregarChecklistItem(gamaId) {
+        const html = `
+        <form id="formChecklistItem" onsubmit="event.preventDefault(); return false;">
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Orden (Posición) *</label>
+                    <input type="number" id="cliOrden" class="formControl" min="1" value="1" required>
+                </div>
+                <div class="formGroup">
+                    <label>Tipo de Respuesta *</label>
+                    <select id="cliTipoRespuesta" class="formControl" required onchange="const u = document.getElementById('cliUnidadContainer'); if(this.value === 'numerico') { u.style.display = 'block'; } else { u.style.display = 'none'; document.getElementById('cliUnidad').value = ''; }">
+                        <option value="ok_nok">OK / NOK</option>
+                        <option value="numerico">Valor Numérico</option>
+                        <option value="texto">Texto Libre</option>
+                    </select>
+                </div>
+            </div>
+            <div class="formGroup">
+                <label>Punto a verificar / Descripción *</label>
+                <textarea id="cliDescripcion" class="formControl" rows="3" placeholder="Ej: Comprobar nivel de aceite del motor..." required></textarea>
+            </div>
+            <div class="formGroup" id="cliUnidadContainer" style="display: none;">
+                <label>Unidad de medida</label>
+                <input type="text" id="cliUnidad" class="formControl" placeholder="Ej: Bar, ºC, mm...">
+            </div>
+            <div class="formGroup">
+                <label style="display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="cliGeneraCorrectivo" value="true">
+                    <strong>¿Generar OT Correctiva si la verificación falla? (Solo aplicable a NOK)</strong>
+                </label>
+            </div>
+        </form>
+    `;
+
+        const footer = `
+        <button class="btn btnSecondary" onclick="closeModal(); verGama(${gamaId})">Cancelar</button>
+        <button class="btn btnPrimary" onclick="guardarChecklistItem(${gamaId})">Añadir Item</button>
+    `;
+
+        openModal('Nuevo Item de Checklist', html, footer);
+    }
+
+    async function guardarChecklistItem(gamaId) {
+        const data = {
+            orden: parseInt(document.getElementById('cliOrden').value),
+            descripcion: document.getElementById('cliDescripcion').value,
+            tipoRespuesta: document.getElementById('cliTipoRespuesta').value,
+            unidad: document.getElementById('cliUnidad').value || null,
+            generaCorrectivo: document.getElementById('cliGeneraCorrectivo').checked
+        };
+
+        if (!data.descripcion.trim()) {
+            showToast('La descripción es obligatoria', 'error');
+            return;
+        }
+
+        try {
+            await apiCall('/api/gama/' + gamaId + '/checklist-item', 'POST', data);
+            closeModal();
+            verGama(gamaId);
+            showToast('Item de checklist añadido', 'success');
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    }
+
+    async function eliminarChecklistItem(gamaId, itemId) {
+        if (!confirm('¿Eliminar este item del checklist?')) return;
+
+        try {
+            await apiCall('/api/gama/' + gamaId + '/checklist-item/' + itemId, 'DELETE');
+            verGama(gamaId);
+            showToast('Item eliminado', 'success');
+        } catch (e) {
+            showToast(e.message, 'error');
+        }
+    }
+
+    // =========================================================================
+    // GESTIÓN DE TÉCNICOS
+    // =========================================================================
+
+    let tecnicosData = [];
+
+    async function cargarTecnicos() {
+        try {
+            const soloActivos = document.getElementById('tecnicosSoloActivos').checked;
+            tecnicosData = await apiCall(`/api/tecnicos?activo=${soloActivos}`);
+            renderTecnicos();
+        } catch (error) {
+            console.error('Error cargando técnicos:', error);
+            showToast('Error al cargar técnicos', 'error');
+        }
+    }
+
+    function renderTecnicos() {
+        const container = document.getElementById('tecnicosTableBody');
+        if (!container) return;
+
+        if (tecnicosData.length === 0) {
+            container.innerHTML = '<tr><td colspan="8" class="emptyState"><i class="fas fa-user-cog"></i><p>No hay técnicos definidos</p></td></tr>';
+            return;
+        }
+
+        let html = '';
+        tecnicosData.forEach(t => {
+            html += `
+            <tr onclick="mostrarFormularioTecnico(tecnicosData.find(x => x.id === ${t.id}))" style="cursor: pointer;">
+                <td><strong>${t.nombre}</strong></td>
+                <td>${t.apellidos || '-'}</td>
+                <td>${t.especialidad || '-'}</td>
+                <td>${t.telefono || '-'}</td>
+                <td><span class="tag ${t.tipo_tecnico === 'interno' ? 'tag-info' : 'tag-warning'}">${t.tipo_tecnico === 'interno' ? 'Interno' : 'Externo'}</span></td>
+                <td>${t.costeHora ? t.costeHora + ' €/h' : '-'}</td>
+                <td><span class="tag ${t.activo ? 'tag-success' : 'tag-muted'}">${t.activo ? 'Activo' : 'Inactivo'}</span></td>
+                <td class="actionsCell">
+                    <button class="btnIcon" onclick="event.stopPropagation(); mostrarFormularioTecnico(tecnicosData.find(x => x.id === ${t.id}))" title="Editar">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btnIcon btnDanger" onclick="event.stopPropagation(); eliminarTecnico(${t.id})" title="Eliminar">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    function mostrarFormularioTecnico(tecnico = null) {
+        const esEdicion = tecnico !== null;
+
+        const html = `
+        <form id="formTecnico" onsubmit="event.preventDefault(); return false;">
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Nombre *</label>
+                    <input type="text" id="tecNombre" class="formControl" value="${tecnico?.nombre || ''}" required>
+                </div>
+                <div class="formGroup">
+                    <label>Apellidos</label>
+                    <input type="text" id="tecApellidos" class="formControl" value="${tecnico?.apellidos || ''}">
+                </div>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Especialidad</label>
+                    <input type="text" id="tecEspecialidad" class="formControl" value="${tecnico?.especialidad || ''}" placeholder="Ej: Electricista, Mecánico">
+                </div>
+                <div class="formGroup">
+                    <label>Coste Hora (€)</label>
+                    <input type="number" id="tecCoste" class="formControl" value="${tecnico?.costeHora || 0}" min="0" step="0.01">
+                </div>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Teléfono</label>
+                    <input type="tel" id="tecTelefono" class="formControl" value="${tecnico?.telefono || ''}">
+                </div>
+                <div class="formGroup">
+                    <label>Tipo de Técnico *</label>
+                    <select id="tecTipoTecnico" class="formControl" required>
+                        <option value="interno" ${tecnico?.tipo_tecnico !== 'externo' ? 'selected' : ''}>Interno</option>
+                        <option value="externo" ${tecnico?.tipo_tecnico === 'externo' ? 'selected' : ''}>Externo</option>
+                    </select>
+                </div>
+            </div>
+            ${esEdicion ? `
+            <div class="formGroup">
+                <label>Estado</label>
+                <select id="tecActivo" class="formControl">
+                    <option value="true" ${tecnico.activo ? 'selected' : ''}>Activo</option>
+                    <option value="false" ${!tecnico.activo ? 'selected' : ''}>Inactivo</option>
+                </select>
+            </div>
+            ` : ''}
+        </form>
+    `;
+
+        const footer = `
+        <button class="btn btnSecondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn btnPrimary" onclick="guardarTecnico(${tecnico?.id || 'null'})">${esEdicion ? 'Guardar' : 'Crear Técnico'}</button>
+    `;
+
+        openModal(esEdicion ? 'Editar Técnico' : 'Nuevo Técnico', html, footer);
+    }
+
+    async function guardarTecnico(id) {
+        const data = {
+            nombre: document.getElementById('tecNombre').value,
+            apellidos: document.getElementById('tecApellidos').value,
+            especialidad: document.getElementById('tecEspecialidad').value,
+            telefono: document.getElementById('tecTelefono').value,
+            tipo_tecnico: document.getElementById('tecTipoTecnico').value,
+            costeHora: parseFloat(document.getElementById('tecCoste').value) || 0,
+            activo: id ? (document.getElementById('tecActivo').value === 'true') : true
+        };
+
+        if (!data.nombre) {
+            showToast('El nombre es obligatorio', 'error');
+            return;
+        }
+
+        try {
+            if (id) {
+                await apiCall(`/api/tecnico/${id}`, 'PUT', data);
+                showToast('Técnico actualizado', 'success');
+            } else {
+                await apiCall('/api/tecnico', 'POST', data);
+                showToast('Técnico creado correctamente', 'success');
+            }
+            closeModal();
+            cargarTecnicos();
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    async function eliminarTecnico(id) {
+        const tecnico = tecnicosData.find(t => t.id === id);
+        if (!confirm(`¿Estás seguro de que quieres eliminar definitivamente al técnico "${tecnico?.nombre}"?`)) return;
+
+        try {
+            await apiCall(`/api/tecnico/${id}`, 'DELETE');
+            cargarTecnicos();
+            showToast('Técnico eliminado correctamente', 'warning');
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    // =========================================================================
+    // CONFIGURACIÓN GENERAL
+    // =========================================================================
+
+    let configData = [];
+
+    async function cargarConfigGeneral() {
+        try {
+            configData = await apiCall('/api/config-general');
+            renderConfigGeneral();
+        } catch (error) {
+            showToast('Error al cargar configuración: ' + error.message, 'error');
+        }
+    }
+
+    function renderConfigGeneral() {
+        const container = document.getElementById('configGeneralSettings');
+        if (!container) return;
+
+        const etiquetas = {
+            'tecnico_puede_cerrar': 'El técnico puede hacer el cierre definitivo de la OT'
+        };
+
+        let html = '';
+        configData.forEach(item => {
+            if (item.tipo === 'booleano') {
+                const checked = item.valor === 'true' ? 'checked' : '';
+                const label = etiquetas[item.clave] || item.clave;
+                html += `
+                <div class="formGroup" style="display:flex; align-items:center; gap: 12px; margin-bottom: 1.2rem;">
+                    <label class="switch" style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">
+                        <input type="checkbox" id="config_${item.clave}" ${checked}
+                               style="opacity:0; width:0; height:0;">
+                        <span class="sliderToggle" data-clave="${item.clave}"
+                              onclick="toggleConfig('${item.clave}')"
+                              style="position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0;
+                                     background:${item.valor === 'true' ? 'var(--primary)' : '#ccc'};
+                                     border-radius:24px; transition:.3s;">
+                            <span style="position:absolute; content:''; height:18px; width:18px; left:3px; bottom:3px;
+                                         background:white; border-radius:50%; transition:.3s;
+                                         transform: translateX(${item.valor === 'true' ? '20px' : '0'})"></span>
+                        </span>
+                    </label>
+                    <div>
+                        <strong>${label}</strong>
+                        ${item.descripcion ? `<div style="color:var(--text-muted); font-size:.85rem;">${item.descripcion}</div>` : ''}
+                    </div>
+                </div>`;
+            }
+        });
+
+        if (!html) html = '<p class="emptyState small">Sin configuraciones disponibles</p>';
+        container.innerHTML = html;
+    }
+
+    function toggleConfig(clave) {
+        const item = configData.find(i => i.clave === clave);
+        if (!item) return;
+        item.valor = item.valor === 'true' ? 'false' : 'true';
+        renderConfigGeneral();
+    }
+
+    async function guardarConfigGeneral() {
+        const payload = configData.map(item => ({ clave: item.clave, valor: item.valor }));
+        try {
+            await apiCall('/api/config-general', 'PUT', payload);
+            showToast('Configuración guardada correctamente', 'success');
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    // =========================================================================
+    // GESTIÓN DE USUARIOS
+    // =========================================================================
+
+    let usuariosData = [];
+
+    async function cargarUsuarios() {
+        try {
+            const soloActivos = document.getElementById('usuariosSoloActivos')?.checked || false;
+            usuariosData = await apiCall(`/api/usuarios?activo=${soloActivos}`);
+            renderUsuarios();
+        } catch (error) {
+            showToast('Error al cargar usuarios: ' + error.message, 'error');
+        }
+    }
+
+    function renderUsuarios() {
+        const tbody = document.getElementById('usuariosTableBody');
+        if (!tbody) return;
+        if (!usuariosData.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="emptyState"><i class="fas fa-users"></i><p>No hay usuarios creados</p></td></tr>';
+            return;
+        }
+        const nivelLabel = { tecnico: 'Técnico', responsable: 'Responsable', admin: 'Admin' };
+        const nivelBadge = { tecnico: 'tag-info', responsable: 'tag-warning', admin: 'tag-danger' };
+        tbody.innerHTML = usuariosData.map(u => `
+            <tr>
+                <td><strong>${u.nombre} ${u.apellidos}</strong></td>
+                <td>${u.username}</td>
+                <td><span class="tag ${nivelBadge[u.nivel] || 'tag-muted'}">${nivelLabel[u.nivel] || u.nivel}</span></td>
+                <td>${u.tecnicoNombre || '<span class="text-muted">—</span>'}</td>
+                <td><span class="tag ${u.activo ? 'tag-success' : 'tag-muted'}">${u.activo ? 'Activo' : 'Inactivo'}</span></td>
+                <td class="actionsCell">
+                    <button class="btnIcon" onclick="editarUsuario(${u.id})" title="Editar"><i class="fas fa-edit"></i></button>
+                    <button class="btnIcon btnDanger" onclick="eliminarUsuario(${u.id})" title="Eliminar"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    async function mostrarFormularioUsuario(id = null) {
+        let u = {};
+        if (id) {
+            u = usuariosData.find(x => x.id === id) || {};
+        }
+        // Cargar lista de técnicos para el selector
+        let tecnicosOpts = '<option value="">— Sin vincular —</option>';
+        try {
+            const tecnicos = await apiCall('/api/tecnicos?activo=true');
+            tecnicosOpts += tecnicos.map(t =>
+                `<option value="${t.id}" ${u.tecnicoId == t.id ? 'selected' : ''}>${t.nombre} ${t.apellidos || ''}</option>`
+            ).join('');
+        } catch (e) { }
+
+        const html = `
+        <form id="formUsuario" onsubmit="event.preventDefault();">
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Nombre *</label>
+                    <input type="text" id="uNombre" class="formControl" value="${u.nombre || ''}" required>
+                </div>
+                <div class="formGroup">
+                    <label>Apellidos</label>
+                    <input type="text" id="uApellidos" class="formControl" value="${u.apellidos || ''}">
+                </div>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Usuario (Login) *</label>
+                    <input type="text" id="uUsername" class="formControl" value="${u.username || ''}" required>
+                </div>
+                <div class="formGroup">
+                    <label>Nivel *</label>
+                    <select id="uNivel" class="formControl">
+                        <option value="tecnico" ${u.nivel === 'tecnico' ? 'selected' : ''}>Técnico</option>
+                        <option value="responsable" ${u.nivel === 'responsable' ? 'selected' : ''}>Responsable</option>
+                        <option value="admin" ${u.nivel === 'admin' ? 'selected' : ''}>Admin</option>
+                    </select>
+                </div>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Técnico vinculado</label>
+                    <select id="uTecnicoId" class="formControl">${tecnicosOpts}</select>
+                </div>
+                <div class="formGroup">
+                    <label>${id ? 'Nueva contraseña (dejar vacío para no cambiar)' : 'Contraseña *'}</label>
+                    <input type="password" id="uPassword" class="formControl" ${id ? '' : 'required'}>
+                </div>
+            </div>
+            ${id ? `
+            <div class="formGroup">
+                <label>Estado</label>
+                <select id="uActivo" class="formControl">
+                    <option value="true" ${u.activo !== false ? 'selected' : ''}>Activo</option>
+                    <option value="false" ${u.activo === false ? 'selected' : ''}>Inactivo</option>
+                </select>
+            </div>` : ''}
+        </form>`;
+
+        const footer = `
+            <button class="btn btnSecondary" onclick="closeModal()">Cancelar</button>
+            <button class="btn btnPrimary" onclick="guardarUsuario(${id || 'null'})">${id ? 'Guardar' : 'Crear Usuario'}</button>
+        `;
+        openModal(id ? 'Editar Usuario' : 'Nuevo Usuario', html, footer);
+    }
+
+    async function editarUsuario(id) {
+        await mostrarFormularioUsuario(id);
+    }
+
+    async function guardarUsuario(id) {
+        const data = {
+            nombre: document.getElementById('uNombre').value,
+            apellidos: document.getElementById('uApellidos').value,
+            username: document.getElementById('uUsername').value,
+            nivel: document.getElementById('uNivel').value,
+            tecnicoId: document.getElementById('uTecnicoId').value || null,
+        };
+        const pw = document.getElementById('uPassword').value;
+        if (pw) data.password = pw;
+        if (id) {
+            data.activo = document.getElementById('uActivo').value === 'true';
+        }
+        if (!data.nombre || !data.username || !data.nivel) {
+            showToast('Completa los campos obligatorios', 'error');
+            return;
+        }
+        try {
+            if (id) {
+                await apiCall(`/api/usuario/${id}`, 'PUT', data);
+                showToast('Usuario actualizado correctamente', 'success');
+            } else {
+                await apiCall('/api/usuario', 'POST', data);
+                showToast('Usuario creado correctamente', 'success');
+            }
+            closeModal();
+            cargarUsuarios();
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    async function eliminarUsuario(id) {
+        const u = usuariosData.find(x => x.id === id);
+        if (!confirm(`¿Eliminar el usuario "${u?.nombre} ${u?.apellidos || ''}"?`)) return;
+        try {
+            await apiCall(`/api/usuario/${id}`, 'DELETE');
+            showToast('Usuario eliminado', 'success');
+            cargarUsuarios();
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+</script>
+
+
+<style>
+    /* Estilos Específicos para Configuración */
+    .configTabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 2rem;
+        border-bottom: 2px solid var(--border-color);
+        padding-bottom: 10px;
+    }
+
+    .configTabBtn {
+        background: none;
+        border: none;
+        padding: 10px 20px;
+        font-size: 1rem;
+        color: var(--text-secondary);
+        cursor: pointer;
+        border-radius: var(--radius-md);
+        transition: all 0.2s;
+    }
+
+    .configTabBtn:hover {
+        background-color: var(--bg-secondary);
+        color: var(--text-primary);
+    }
+
+    .configTabBtn.active {
+        color: #1976d2;
+        border-bottom-color: #1976d2;
+        font-weight: 600;
+        background-color: #f0f7ff;
+    }
+
+    .configTabContent {
+        padding: 20px 0;
+    }
+
+    /* Estilos de gamas (reutilizados) */
+    .gamasContainer {
+        margin-top: 20px;
+    }
+
+    .gamasGrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+        gap: 20px;
+    }
+
+    .gamaCard {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 16px;
+        cursor: pointer;
+        transition: all 0.2s;
+    }
+
+    .gamaCard:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        transform: translateY(-2px);
+    }
+
+    .gamaCard.inactive {
+        opacity: 0.6;
+    }
+
+    .gamaCardHeader {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+
+    .gamaCodigo {
+        font-weight: 600;
+        color: #1976d2;
+        font-size: 14px;
+    }
+
+    .gamaCardBody h4 {
+        margin: 0 0 8px 0;
+        font-size: 16px;
+        color: #333;
+    }
+
+    .gamaDesc {
+        color: #666;
+        font-size: 14px;
+        margin: 0;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .gamaCardFooter {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px solid #f0f0f0;
+    }
+
+    .gamaStats {
+        display: flex;
+        gap: 16px;
+        font-size: 13px;
+        color: #666;
+    }
+
+    .gamaStats span i {
+        margin-right: 4px;
+        color: #999;
+    }
+
+    /* Tabs dentro de modales */
+    .tabs {
+        display: flex;
+        gap: 2px;
+        margin: 20px 0 0 0;
+        border-bottom: 2px solid #e0e0e0;
+    }
+
+    .tabBtn {
+        padding: 10px 20px;
+        background: transparent;
+        border: none;
+        border-bottom: 2px solid transparent;
+        cursor: pointer;
+        font-size: 14px;
+        color: #666;
+        transition: all 0.2s;
+        margin-bottom: -2px;
+    }
+
+    .tabBtn:hover {
+        color: #1976d2;
+    }
+
+    .tabBtn.active {
+        color: #1976d2;
+        border-bottom-color: #1976d2;
+        font-weight: 600;
+    }
+
+    .tabContent {
+        display: none;
+        padding: 20px 0;
+    }
+
+    .tabContent.active {
+        display: block;
+    }
+
+    .sectionHeader {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 16px;
+    }
+
+    .sectionHeader h4 {
+        margin: 0;
+        font-size: 16px;
+    }
+
+    .tareasList {
+        list-style: decimal;
+        padding-left: 24px;
+    }
+
+    .tareasList li {
+        margin-bottom: 12px;
+    }
+
+    .tareaItem {
+        display: flex;
+        gap: 12px;
+        align-items: start;
+        padding: 8px;
+        background: #f9f9f9;
+        border-radius: 4px;
+    }
+
+    .tareaDesc {
+        flex: 1;
+        font-size: 14px;
+    }
+
+    .tareaDuracion {
+        background: #e3f2fd;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        color: #1976d2;
+        white-space: nowrap;
+    }
+
+    .tareaHerramientas {
+        font-size: 12px;
+        color: #666;
+        margin-top: 4px;
+    }
+
+    /* ========================================= */
+    /* TIPOS DE INTERVENCIÓN */
+    /* ========================================= */
+
+    .tipoDetalle {
+        padding: 0;
+    }
+
+    .tipoDetalleHeader {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 24px;
+        border-radius: 12px;
+    }
+
+    .tipoDetalleIcon {
+        flex-shrink: 0;
+    }
+
+    .tipoDetalleHeader h3 {
+        margin: 0 0 4px 0;
+    }
+
+    .iconoPreview {
+        width: 50px;
+        height: 38px;
+        background: #f5f5f5;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+    }
+
+    .formColorInput {
+        height: 38px;
+        padding: 4px;
+        cursor: pointer;
+    }
+
+    .tag-success {
+        background: #e8f5e9 !important;
+        color: #2e7d32 !important;
+    }
+
+    .tag-muted {
+        background: #f5f5f5 !important;
+        color: #999 !important;
+    }
+</style>
+{% endblock %}

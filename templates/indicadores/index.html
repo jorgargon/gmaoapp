@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="pageHeader">
+    <h2><i class="fas fa-chart-bar"></i> Informes e Indicadores</h2>
+</div>
+
+<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:1.5rem; padding:1.5rem 0;">
+
+    <!-- Informe Órdenes de Trabajo -->
+    <a href="{{ url_for('indicadores.informe_ordenes') }}" class="indicadorCard" style="text-decoration:none; display:flex; flex-direction:column; gap:0.75rem; padding:1.5rem; border-radius:8px; background:#fff; border:1px solid #e0e0e0; box-shadow:0 2px 4px rgba(0,0,0,.06); transition:box-shadow .2s; cursor:pointer;">
+        <div style="display:flex; align-items:center; gap:1rem;">
+            <span style="width:48px; height:48px; border-radius:50%; background:#E3F2FD; display:flex; align-items:center; justify-content:center; font-size:1.4rem; color:#1565C0; flex-shrink:0;">
+                <i class="fas fa-clipboard-list"></i>
+            </span>
+            <div>
+                <div style="font-weight:700; font-size:1rem; color:#1a1a1a;">Órdenes de Trabajo</div>
+                <div style="font-size:0.82rem; color:#666; margin-top:2px;">Listado completo con costes y horas</div>
+            </div>
+        </div>
+        <div style="font-size:0.8rem; color:#888; border-top:1px solid #f0f0f0; padding-top:0.75rem;">
+            Filtros: fecha · tipo · equipo · estado &nbsp;·&nbsp; <span style="color:#1565C0;">Exporta a Excel</span>
+        </div>
+    </a>
+
+    <!-- Informe Preventivos -->
+    <a href="{{ url_for('indicadores.informe_preventivos') }}" class="indicadorCard" style="text-decoration:none; display:flex; flex-direction:column; gap:0.75rem; padding:1.5rem; border-radius:8px; background:#fff; border:1px solid #e0e0e0; box-shadow:0 2px 4px rgba(0,0,0,.06); transition:box-shadow .2s; cursor:pointer;">
+        <div style="display:flex; align-items:center; gap:1rem;">
+            <span style="width:48px; height:48px; border-radius:50%; background:#E8F5E9; display:flex; align-items:center; justify-content:center; font-size:1.4rem; color:#2E7D32; flex-shrink:0;">
+                <i class="fas fa-shield-alt"></i>
+            </span>
+            <div>
+                <div style="font-weight:700; font-size:1rem; color:#1a1a1a;">Preventivos Planificados</div>
+                <div style="font-size:0.82rem; color:#666; margin-top:2px;">Plan futuro y cumplimiento</div>
+            </div>
+        </div>
+        <div style="font-size:0.8rem; color:#888; border-top:1px solid #f0f0f0; padding-top:0.75rem;">
+            Filtros: rango fechas · equipo &nbsp;·&nbsp; <span style="color:#2E7D32;">Exporta a Excel</span>
+        </div>
+    </a>
+
+    <!-- Informe Movimientos -->
+    <a href="{{ url_for('indicadores.informe_movimientos') }}" class="indicadorCard" style="text-decoration:none; display:flex; flex-direction:column; gap:0.75rem; padding:1.5rem; border-radius:8px; background:#fff; border:1px solid #e0e0e0; box-shadow:0 2px 4px rgba(0,0,0,.06); transition:box-shadow .2s; cursor:pointer;">
+        <div style="display:flex; align-items:center; gap:1rem;">
+            <span style="width:48px; height:48px; border-radius:50%; background:#FFF3E0; display:flex; align-items:center; justify-content:center; font-size:1.4rem; color:#E65100; flex-shrink:0;">
+                <i class="fas fa-exchange-alt"></i>
+            </span>
+            <div>
+                <div style="font-weight:700; font-size:1rem; color:#1a1a1a;">Movimientos de Stock</div>
+                <div style="font-size:0.82rem; color:#666; margin-top:2px;">Entradas, salidas y consumos</div>
+            </div>
+        </div>
+        <div style="font-size:0.8rem; color:#888; border-top:1px solid #f0f0f0; padding-top:0.75rem;">
+            Filtros: fecha · tipo · recambio &nbsp;·&nbsp; <span style="color:#E65100;">Exporta a Excel</span>
+        </div>
+    </a>
+
+    <!-- Dashboards Gráficos -->
+    <a href="{{ url_for('indicadores.dashboards') }}" class="indicadorCard" style="text-decoration:none; display:flex; flex-direction:column; gap:0.75rem; padding:1.5rem; border-radius:8px; background:#fff; border:1px solid #e0e0e0; box-shadow:0 2px 4px rgba(0,0,0,.06); transition:box-shadow .2s; cursor:pointer;">
+        <div style="display:flex; align-items:center; gap:1rem;">
+            <span style="width:48px; height:48px; border-radius:50%; background:#FCE4EC; display:flex; align-items:center; justify-content:center; font-size:1.4rem; color:#AD1457; flex-shrink:0;">
+                <i class="fas fa-chart-line"></i>
+            </span>
+            <div>
+                <div style="font-weight:700; font-size:1rem; color:#1a1a1a;">Dashboards Gráficos</div>
+                <div style="font-size:0.82rem; color:#666; margin-top:2px;">Análisis visual interactivo</div>
+            </div>
+        </div>
+        <div style="font-size:0.8rem; color:#888; border-top:1px solid #f0f0f0; padding-top:0.75rem;">
+            Pareto · Heatmap · Evolución · Tiempos · TOP equipos
+        </div>
+    </a>
+
+    <!-- KPI Dashboard -->
+    <a href="{{ url_for('indicadores.indicadores_kpi') }}" class="indicadorCard" style="text-decoration:none; display:flex; flex-direction:column; gap:0.75rem; padding:1.5rem; border-radius:8px; background:#fff; border:1px solid #e0e0e0; box-shadow:0 2px 4px rgba(0,0,0,.06); transition:box-shadow .2s; cursor:pointer;">
+        <div style="display:flex; align-items:center; gap:1rem;">
+            <span style="width:48px; height:48px; border-radius:50%; background:#F3E5F5; display:flex; align-items:center; justify-content:center; font-size:1.4rem; color:#6A1B9A; flex-shrink:0;">
+                <i class="fas fa-tachometer-alt"></i>
+            </span>
+            <div>
+                <div style="font-weight:700; font-size:1rem; color:#1a1a1a;">Indicadores KPI</div>
+                <div style="font-size:0.82rem; color:#666; margin-top:2px;">Norma EN 15341 — 14 indicadores</div>
+            </div>
+        </div>
+        <div style="font-size:0.8rem; color:#888; border-top:1px solid #f0f0f0; padding-top:0.75rem;">
+            Económicos · Técnicos · Organizativos
+        </div>
+    </a>
+
+</div>
+
+<style>
+    .indicadorCard:hover {
+        box-shadow: 0 6px 16px rgba(0,0,0,.12) !important;
+        transform: translateY(-2px);
+    }
+</style>
+{% endblock %}

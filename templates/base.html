@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logoWhite.png') }}">
+    <title>{% block title %}GMAO{% endblock %}</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Sistema de Gestión de Mantenimiento Asistido por Ordenador">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    {% block head %}{% endblock %}
+</head>
+
+<body>
+    <header class="header">
+        <div class="headerLeft">
+            <a href="{{ url_for('home') }}" class="logoLink">
+                <img src="{{ url_for('static', filename='images/logoWhite.png') }}" alt="Logo JGG" class="logo">
+                <span class="siteTitle">GMAO</span>
+            </a>
+        </div>
+        <div class="headerRight">
+            <div class="headerUserInfo">
+                <span class="headerUserName"><i class="fas fa-user-circle"></i> {{ current_user.nombre if current_user
+                    else 'Invitado' }}</span>
+                <button class="btnLogout" onclick="doLogout()" title="Cerrar sesión"><i
+                        class="fas fa-sign-out-alt"></i></button>
+            </div>
+            <div class="headerDateTime">
+                <span class="headerDate" id="currentDate"></span>
+                <span class="headerTime" id="currentTime"></span>
+            </div>
+        </div>
+    </header>
+
+    <div class="layout">
+        <nav class="sidebar fixedSidebar">
+            <a href="{{ url_for('home') }}"
+                class="sidebarIconButton {% if request.endpoint == 'home' %}active{% endif %}">
+                <span class="iconCircle"><i class="fas fa-home"></i></span>
+                <span class="buttonLabel">Inicio</span>
+            </a>
+            <a href="{{ url_for('verActivos') }}"
+                class="sidebarIconButton {% if request.endpoint == 'verActivos' %}active{% endif %}">
+                <span class="iconCircle"><i class="fas fa-cogs"></i></span>
+                <span class="buttonLabel">Equipos</span>
+            </a>
+            <a href="{{ url_for('verRecambios') }}"
+                class="sidebarIconButton {% if request.endpoint == 'verRecambios' %}active{% endif %}">
+                <span class="iconCircle"><i class="fas fa-puzzle-piece"></i></span>
+                <span class="buttonLabel">Recambios</span>
+            </a>
+            <a href="{{ url_for('verOrdenes') }}"
+                class="sidebarIconButton {% if request.endpoint == 'verOrdenes' %}active{% endif %}">
+                <span class="iconCircle"><i class="fas fa-wrench"></i></span>
+                <span class="buttonLabel">Órdenes</span>
+            </a>
+            <a href="{{ url_for('verPreventivo') }}"
+                class="sidebarIconButton {% if request.endpoint == 'verPreventivo' %}active{% endif %}">
+                <span class="iconCircle"><i class="fas fa-shield-alt"></i></span>
+                <span class="buttonLabel">Preventivo</span>
+            </a>
+            {% if current_user and current_user.nivel != 'tecnico' %}
+            <a href="{{ url_for('indicadores.index') }}"
+                class="sidebarIconButton {% if request.blueprint == 'indicadores' %}active{% endif %}">
+                <span class="iconCircle"><i class="fas fa-chart-bar"></i></span>
+                <span class="buttonLabel">Informes</span>
+            </a>
+            <a href="{{ url_for('verConfiguracion') }}"
+                class="sidebarIconButton {% if request.endpoint == 'verConfiguracion' %}active{% endif %}">
+                <span class="iconCircle"><i class="fas fa-cog"></i></span>
+                <span class="buttonLabel">Config</span>
+            </a>
+            {% endif %}
+        </nav>
+
+        <main class="content">
+            {% block content %}{% endblock %}
+        </main>
+
+        <aside class="rightbar">
+            {% block rightMenu %}
+            <div class="rightSpacer"></div>
+            {% endblock %}
+        </aside>
+    </div>
+
+    <!-- Toast notifications container -->
+    <div id="toastContainer" class="toastContainer"></div>
+
+    <!-- Modal container -->
+    <div id="modalOverlay" class="modalOverlay" style="display: none;">
+        <div id="modalContent" class="modalContent">
+            <div class="modalHeader">
+                <h3 id="modalTitle">Título</h3>
+                <button class="modalClose" onclick="closeModal()">&times;</button>
+            </div>
+            <div id="modalBody" class="modalBody"></div>
+            <div id="modalFooter" class="modalFooter"></div>
+        </div>
+    </div>
+
+    <script>
+        // Exponer el nivel del usuario logueado a todos los scripts JS
+        window.USER_NIVEL = '{{ current_user.nivel if current_user else "invitado" }}';
+        window.USER_TECNICO_NOMBRE = "{{ current_user.tecnico.nombre if current_user and current_user.tecnico else current_user.nombre if current_user else 'Invitado' }}";
+        window.TECNICO_PUEDE_CERRAR = ('{{ "true" if tecnico_puede_cerrar else "false" }}' === 'true');
+
+        // Mostrar fecha y hora actual en el header
+        function updateDateTime() {
+            const now = new Date();
+
+            // Fecha
+            document.getElementById('currentDate').textContent = now.toLocaleDateString('es-ES', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+
+            // Hora
+            document.getElementById('currentTime').textContent = now.toLocaleTimeString('es-ES', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }
+
+        // Ejecutar inmediatamente y luego cada segundo
+        updateDateTime();
+        setInterval(updateDateTime, 1000);
+
+        // Sistema de notificaciones toast
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast toast-${type}`;
+            toast.innerHTML = `
+                <span>${message}</span>
+                <button onclick="this.parentElement.remove()">&times;</button>
+            `;
+            container.appendChild(toast);
+
+            setTimeout(() => toast.remove(), 5000);
+        }
+
+        // Función global para formato español de números (ej. 1.234,56)
+        function formatoEspanol(num, maxDecimals = 2) {
+            if (num === null || num === undefined || num === '') return '-';
+            const val = parseFloat(num);
+            if (isNaN(val)) return num;
+            return val.toLocaleString('es-ES', {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: maxDecimals
+            });
+        }
+
+        // Sistema de modales
+        function openModal(title, bodyHtml, footerHtml = '') {
+            document.getElementById('modalTitle').textContent = title;
+            document.getElementById('modalBody').innerHTML = bodyHtml;
+            document.getElementById('modalFooter').innerHTML = footerHtml;
+            document.getElementById('modalOverlay').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('modalOverlay').style.display = 'none';
+        }
+
+        // Cerrar modal al hacer clic fuera
+        document.getElementById('modalOverlay').addEventListener('click', function (e) {
+            if (e.target === this) closeModal();
+        });
+
+        // Función helper para peticiones API
+        async function apiCall(url, method = 'GET', data = null) {
+            const options = {
+                method,
+                headers: { 'Content-Type': 'application/json' }
+            };
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+
+            // Prevent caching for GET requests
+            if (method === 'GET') {
+                const separator = url.includes('?') ? '&' : '?';
+                url += `${separator}_=${new Date().getTime()}`;
+            }
+
+            const response = await fetch(url, options);
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Error en la operación');
+            }
+            return result;
+        }
+
+        // Función global de cierre de sesión
+        async function doLogout() {
+            try {
+                const resp = await fetch('/api/auth/logout', { method: 'POST' });
+                if (resp.ok) {
+                    window.location.href = '/login';
+                }
+            } catch (e) {
+                console.error("Error al cerrar sesión", e);
+            }
+        }
+    </script>
+
+    {% block scripts %}{% endblock %}
+</body>
+
+</html>

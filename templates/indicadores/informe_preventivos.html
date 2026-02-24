@@ -1,0 +1,201 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+    .badgeEstado { display:inline-block; padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:600; }
+    .estado-pendiente { background:#FFF9C4; color:#827717; }
+    .estado-cerrada   { background:#E8F5E9; color:#2E7D32; }
+    .estado-en_curso  { background:#FFF3E0; color:#E65100; }
+    .estado-asignada  { background:#E3F2FD; color:#1565C0; }
+    .estado-no-creada { background:#F5F5F5; color:#9E9E9E; }
+    .rowPendiente { background:#FFFDE7 !important; }
+    .rowPendiente td:first-child { font-weight:700; color:#E65100; }
+    .infoPanel { display:flex; gap:1.5rem; flex-wrap:wrap; margin-bottom:1rem; }
+    .infoBox { background:#fff; border:1px solid #e0e0e0; border-radius:8px; padding:0.75rem 1.25rem; min-width:130px; text-align:center; }
+    .infoBox .val { font-size:1.4rem; font-weight:700; color:#2E7D32; }
+    .infoBox .lbl { font-size:0.75rem; color:#666; margin-top:2px; }
+    .filterGroup { display:flex; align-items:center; gap:0.5rem; }
+    .filterGroup label { font-size:0.82rem; color:#555; white-space:nowrap; }
+    .filterGroup input, .filterGroup select { padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:0.85rem; }
+    .legend { display:flex; gap:1rem; align-items:center; font-size:0.8rem; color:#666; margin-bottom:0.5rem; }
+    .legend-dot { width:12px; height:12px; border-radius:3px; display:inline-block; }
+</style>
+{% endblock %}
+
+{% block rightMenu %}
+<button class="btn btnPrimary btnSm" onclick="exportarExcel()" title="Exportar a Excel">
+    <i class="fas fa-file-excel"></i> Excel
+</button>
+<a href="{{ url_for('indicadores.index') }}" class="btn btnSecondary btnSm" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+    <i class="fas fa-arrow-left"></i> Volver
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="pageHeader">
+    <h2><i class="fas fa-shield-alt"></i> Informe de Preventivos Planificados</h2>
+</div>
+
+<!-- Filtros -->
+<div class="filtersBar" style="gap:1rem; align-items:flex-end;">
+    <div class="filterGroup">
+        <label>Desde</label>
+        <input type="date" id="fDesde" />
+    </div>
+    <div class="filterGroup">
+        <label>Hasta</label>
+        <input type="date" id="fHasta" />
+    </div>
+    <button class="btn btnPrimary btnSm" onclick="cargar()"><i class="fas fa-search"></i> Consultar</button>
+</div>
+
+<!-- Panel de resumen -->
+<div class="infoPanel" id="infoPanel" style="display:none;">
+    <div class="infoBox"><div class="val" id="sumTotal">-</div><div class="lbl">Total planificados</div></div>
+    <div class="infoBox"><div class="val" id="sumConOt" style="color:#1565C0;">-</div><div class="lbl">Con OT creada</div></div>
+    <div class="infoBox"><div class="val" id="sumPendiente" style="color:#E65100;">-</div><div class="lbl">Pendientes de crear</div></div>
+    <div class="infoBox"><div class="val" id="sumHoras" style="color:#555;">-</div><div class="lbl">Horas previstas total</div></div>
+</div>
+
+<!-- Leyenda + buscador -->
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.5rem; flex-wrap:wrap; gap:0.5rem;">
+    <div class="legend">
+        <span class="legend-dot" style="background:#FFFDE7; border:1px solid #F9A825;"></span> OT pendiente de crear
+        <span class="legend-dot" style="background:#fff; border:1px solid #e0e0e0;"></span> OT ya creada
+    </div>
+    <div style="display:flex; align-items:center; gap:0.5rem;">
+        <i class="fas fa-search" style="color:#999;"></i>
+        <input type="text" id="buscar" placeholder="Buscar..." style="padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:0.85rem; width:220px;" oninput="filtrarTabla()">
+        <span id="contadorFilas" style="font-size:0.8rem; color:#888;"></span>
+    </div>
+</div>
+
+<!-- Tabla -->
+<div class="tableContainer" style="overflow-x:auto;">
+    <table class="dataTable small" id="tablaPrev">
+        <thead>
+            <tr>
+                <th>Nº Orden</th>
+                <th>Fecha Plan.</th>
+                <th>Equipo</th>
+                <th>Gama</th>
+                <th>Frecuencia</th>
+                <th style="text-align:right;">H. Previstas</th>
+                <th>Tareas</th>
+                <th>Recambios</th>
+                <th>Último Prev.</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody id="tablaBody"></tbody>
+    </table>
+    <div id="noData" style="display:none; text-align:center; padding:3rem; color:#999;">
+        <i class="fas fa-inbox" style="font-size:2rem; margin-bottom:0.5rem; display:block;"></i>
+        No hay preventivos planificados para el rango seleccionado.
+    </div>
+    <div id="loadingMsg" style="display:none; text-align:center; padding:3rem; color:#999;">
+        <i class="fas fa-spinner fa-spin" style="font-size:1.5rem;"></i> Calculando planificación...
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let _allRows = [];
+
+    // Inicializar: mes actual + 3 meses
+    (function() {
+        const hoy = new Date();
+        const y = hoy.getFullYear(), m = String(hoy.getMonth() + 1).padStart(2, '0');
+        document.getElementById('fDesde').value = `${y}-${m}-01`;
+        const fin = new Date(hoy.getFullYear(), hoy.getMonth() + 3, 0);
+        document.getElementById('fHasta').value = fin.toISOString().split('T')[0];
+    })();
+
+    function cargar() {
+        const params = new URLSearchParams({
+            fecha_desde: document.getElementById('fDesde').value,
+            fecha_hasta: document.getElementById('fHasta').value,
+        });
+
+        document.getElementById('loadingMsg').style.display = 'block';
+        document.getElementById('noData').style.display = 'none';
+        document.getElementById('tablaBody').innerHTML = '';
+        document.getElementById('infoPanel').style.display = 'none';
+
+        fetch(`/informes/api/preventivos?${params}`)
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('loadingMsg').style.display = 'none';
+                _allRows = data.rows || [];
+                renderizarTabla(_allRows);
+                const res = data.resumen || {};
+                document.getElementById('sumTotal').textContent = res.total_planificados || 0;
+                document.getElementById('sumConOt').textContent = res.con_ot || 0;
+                document.getElementById('sumPendiente').textContent = res.pendientes || 0;
+                document.getElementById('sumHoras').textContent = (res.total_horas_previstas || 0).toLocaleString('es-ES', {maximumFractionDigits:1}) + ' h';
+                document.getElementById('infoPanel').style.display = 'flex';
+            })
+            .catch(err => {
+                document.getElementById('loadingMsg').style.display = 'none';
+                showToast('Error al cargar datos: ' + err.message, 'error');
+            });
+    }
+
+    function renderizarTabla(rows) {
+        const tbody = document.getElementById('tablaBody');
+        const noData = document.getElementById('noData');
+
+        if (!rows.length) {
+            tbody.innerHTML = '';
+            noData.style.display = 'block';
+            document.getElementById('contadorFilas').textContent = '0 resultados';
+            return;
+        }
+        noData.style.display = 'none';
+        document.getElementById('contadorFilas').textContent = `${rows.length} resultados`;
+
+        tbody.innerHTML = rows.map(r => {
+            const cls = r.es_pendiente ? 'rowPendiente' : '';
+            const estCls = r.estado === 'No creada' ? 'estado-no-creada' : ('estado-' + r.estado);
+            return `
+                <tr class="${cls}">
+                    <td>${esc(r.numero)}</td>
+                    <td>${esc(r.fecha_planificada)}</td>
+                    <td>
+                        <div style="font-size:0.8rem; color:#1565C0; font-weight:600;">${esc(r.equipo_codigo)}</div>
+                        <div style="font-size:0.82rem;">${esc(r.equipo_nombre)}</div>
+                    </td>
+                    <td>
+                        <div style="font-weight:600; font-size:0.82rem;">${esc(r.gama_codigo)}</div>
+                        <div style="font-size:0.8rem; color:#555;">${esc(r.gama_nombre)}</div>
+                    </td>
+                    <td style="font-size:0.8rem;">${esc(r.frecuencia)}</td>
+                    <td style="text-align:right;">${r.horas_previstas > 0 ? r.horas_previstas.toLocaleString('es-ES', {maximumFractionDigits:1}) + ' h' : '-'}</td>
+                    <td style="font-size:0.78rem; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(r.tareas)}">${esc(r.tareas) || '-'}</td>
+                    <td style="font-size:0.78rem; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(r.recambios_necesarios)}">${esc(r.recambios_necesarios) || '-'}</td>
+                    <td style="font-size:0.8rem;">${esc(r.ultimo_preventivo)}</td>
+                    <td><span class="badgeEstado ${estCls}">${esc(r.estado)}</span></td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function filtrarTabla() {
+        const q = document.getElementById('buscar').value.trim().toLowerCase();
+        if (!q) { renderizarTabla(_allRows); return; }
+        const filtered = _allRows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
+        renderizarTabla(filtered);
+    }
+
+    function exportarExcel() {
+        const params = new URLSearchParams({
+            fecha_desde: document.getElementById('fDesde').value,
+            fecha_hasta: document.getElementById('fHasta').value,
+        });
+        window.location.href = `/informes/api/preventivos/excel?${params}`;
+    }
+
+    function esc(s) { return s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+</script>
+{% endblock %}

@@ -1,0 +1,718 @@
+{% extends "mobile/base.html" %}
+{% block title %}{{ ot.numero }} – GMAO{% endblock %}
+
+{% block header %}
+<a href="{{ url_for('mobile.home') }}" class="m-header-back">
+  <i class="fas fa-arrow-left"></i>
+</a>
+<span class="m-header-title">{{ ot.numero }}</span>
+<div class="m-header-actions">
+  <span class="m-badge m-badge-estado-{{ ot.estado }}" style="font-size:.72rem;padding:4px 8px;">
+    {{ ot.estado | replace('_', ' ') }}
+  </span>
+</div>
+{% endblock %}
+
+{% block content %}
+
+{# Cabecera con título y equipo #}
+<div class="m-ot-header-card prio-{{ ot.prioridad }}">
+  <div class="m-ot-header-titulo">{{ ot.titulo }}</div>
+  <div class="m-ot-header-badges">
+    <span class="m-badge m-badge-tipo-{{ ot.tipo }}">{{ ot.tipo }}</span>
+    <span class="m-badge m-badge-prio-{{ ot.prioridad }}">
+      {% if ot.prioridad == 'urgente' %}<i class="fas fa-exclamation-triangle"></i>{% endif %}
+      {{ ot.prioridad }}
+    </span>
+  </div>
+  {% if ot._ruta %}
+  <div class="m-ot-header-equipo">
+    <i class="fas fa-map-marker-alt" style="color:var(--m-primary)"></i>
+    {% for nivel in ot._ruta %}
+    {% if not loop.first %}<i class="fas fa-chevron-right" style="font-size:.65rem;opacity:.5"></i>{% endif %}
+    <span style="font-weight:{% if nivel.tipo in ['planta','zona'] %}700{% else %}400{% endif %}">{{ nivel.nombre
+      }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+
+{# ---- SECCIÓN: Información ---- #}
+<div class="m-section" id="sec-info">
+  <div class="m-section-header">
+    <div class="m-section-header-left">
+      <i class="fas fa-info-circle"></i>Información
+    </div>
+    <i class="fas fa-chevron-down m-section-chevron"></i>
+  </div>
+  <div class="m-section-body">
+    <div class="m-info-row">
+      <span class="m-info-label">Técnico asignado</span>
+      <span class="m-info-value">{{ ot.tecnicoAsignado or '—' }}</span>
+    </div>
+    {% if ot.fechaProgramada %}
+    <div class="m-info-row">
+      <span class="m-info-label">Fecha programada</span>
+      <span class="m-info-value">{{ ot.fechaProgramada.strftime('%d/%m/%Y') }}</span>
+    </div>
+    {% endif %}
+    {% if ot.tiempoEstimado %}
+    <div class="m-info-row">
+      <span class="m-info-label">Tiempo estimado</span>
+      <span class="m-info-value">{{ ot.tiempoEstimado }} h</span>
+    </div>
+    {% endif %}
+    {% if ot.descripcionProblema %}
+    <div class="m-info-row">
+      <span class="m-info-label">Descripción</span>
+      <span class="m-info-value">{{ ot.descripcionProblema }}</span>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{# ---- SECCIÓN: Control de tiempo ---- #}
+{% if ot.estado not in ['cerrada', 'cancelada'] %}
+<div class="m-section" id="sec-tiempo">
+  <div class="m-section-header">
+    <div class="m-section-header-left">
+      <i class="fas fa-stopwatch"></i>Control de tiempo
+    </div>
+    <i class="fas fa-chevron-down m-section-chevron"></i>
+  </div>
+  <div class="m-section-body">
+    <div class="m-timer-box">
+      <div class="m-timer-value" id="timerDisplay">
+        {% if trabajo_activo %}
+        <span class="m-time-en-curso"><i class="fas fa-circle" style="font-size:.8rem"></i> En curso</span>
+        {% else %}
+        00:00:00
+        {% endif %}
+      </div>
+      <div class="m-timer-label">Sesión actual</div>
+      <div class="m-timer-total">
+        Tiempo total registrado: <strong>{{ '%.1f' % (ot.tiempoReal or 0) }} h</strong>
+      </div>
+    </div>
+
+    {% if trabajo_activo %}
+    <button class="m-btn m-btn-warning m-btn-full" onclick="pausarTrabajo()">
+      <i class="fas fa-pause"></i> Pausar trabajo
+    </button>
+    {% else %}
+    <button class="m-btn m-btn-success m-btn-full" onclick="iniciarTrabajo()">
+      <i class="fas fa-play"></i> Iniciar trabajo
+    </button>
+    {% endif %}
+
+    {# Registros de tiempo #}
+    {% if registros_tiempo %}
+    <div style="margin-top:14px">
+      <div class="m-text-muted" style="margin-bottom:6px;font-size:.8rem;font-weight:600">HISTÓRICO DE SESIONES</div>
+      {% for r in registros_tiempo %}
+      <div class="m-time-record">
+        <div class="m-time-record-left">
+          <div>{{ r.tecnico }}</div>
+          <div class="m-text-small">{{ r.inicio.strftime('%d/%m %H:%M') if r.inicio else '' }}</div>
+        </div>
+        {% if r.enCurso %}
+        <span class="m-time-en-curso"><i class="fas fa-circle" style="font-size:.65rem"></i> En curso</span>
+        {% else %}
+        <span class="m-time-record-dur">{{ '%.2f' % r.duracionHoras }} h</span>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{# ---- SECCIÓN: Materiales / Consumos ---- #}
+<div class="m-section" id="sec-consumos">
+  <div class="m-section-header">
+    <div class="m-section-header-left">
+      <i class="fas fa-box-open"></i>
+      Materiales usados
+      {% if consumos %}<span class="m-badge"
+        style="background:var(--m-primary-light);color:var(--m-primary);margin-left:6px">{{ consumos|length }}</span>{%
+      endif %}
+    </div>
+    <i class="fas fa-chevron-down m-section-chevron"></i>
+  </div>
+  <div class="m-section-body">
+    {% if consumos %}
+    {% for c in consumos %}
+    <div class="m-consumo-item">
+      <div>
+        <div class="m-consumo-nombre">{{ c.recambio.nombre if c.recambio else '—' }}</div>
+        <div class="m-consumo-qty">Cantidad: {{ c.cantidad }} {{ c.recambio.unidadMedida if c.recambio else '' }}</div>
+      </div>
+      <div class="m-consumo-coste">
+        {% if c.precioUnitario %}{{ '%.2f' % (c.cantidad * c.precioUnitario) }} €{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="m-text-muted m-text-center" style="padding:10px 0">Sin materiales registrados</p>
+    {% endif %}
+
+    {% if ot.estado not in ['cerrada', 'cancelada'] %}
+    <button class="m-btn m-btn-outline m-btn-full" style="margin-top:10px" onclick="abrirModalConsumo()">
+      <i class="fas fa-plus"></i> Registrar material
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+{# ---- SECCIÓN: Tareas a realizar (solo preventivos con gama) ---- #}
+{% if tareas_gama %}
+<div class="m-section" id="sec-tareas">
+  <div class="m-section-header">
+    <div class="m-section-header-left">
+      <i class="fas fa-list-check"></i>
+      Tareas a realizar
+      <span class="m-badge" style="background:var(--m-primary-light);color:var(--m-primary);margin-left:6px">{{
+        tareas_gama|length }}</span>
+    </div>
+    <i class="fas fa-chevron-down m-section-chevron"></i>
+  </div>
+  <div class="m-section-body">
+    {% for tarea in tareas_gama %}
+    {% set ya_hecha = tarea.id in tareas_realizadas_ids %}
+    <div class="m-tarea-item {% if ya_hecha %}done{% endif %}" id="tarea-{{ tarea.id }}">
+      <div class="m-tarea-header">
+        <label class="m-tarea-check-label">
+          <input type="checkbox" class="m-tarea-cb" data-id="{{ tarea.id }}" {% if ya_hecha %}checked{% endif %}
+            onchange="toggleTarea(this)">
+          <span class="m-tarea-num">{{ loop.index }}</span>
+          <span class="m-tarea-desc">{{ tarea.descripcion }}</span>
+        </label>
+        {% if tarea.duracionEstimada %}
+        <span class="m-tarea-dur">
+          <i class="fas fa-clock"></i>
+          {{ tarea.duracionEstimada }} min
+        </span>
+        {% endif %}
+      </div>
+      {% if tarea.instrucciones %}
+      <div class="m-tarea-instrucciones">
+        <i class="fas fa-info-circle"></i> {{ tarea.instrucciones }}
+      </div>
+      {% endif %}
+      {% if tarea.herramientas %}
+      <div class="m-tarea-herramientas">
+        <i class="fas fa-toolbox"></i> {{ tarea.herramientas }}
+      </div>
+      {% endif %}
+    </div>
+    {% endfor %}
+    <div class="m-tarea-progreso">
+      <div class="m-tarea-progreso-bar">
+        <div class="m-tarea-progreso-fill" id="tareaProgresoFill" style="width:0%"></div>
+      </div>
+      <span class="m-tarea-progreso-txt" id="tareaProgresoTxt">0 / {{ tareas_gama|length }}</span>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{# ---- SECCIÓN: Checklist de verificación (solo preventivos) ---- #}
+{% if checklist_items %}
+<div class="m-section" id="sec-checklist">
+  <div class="m-section-header">
+    <div class="m-section-header-left">
+      <i class="fas fa-clipboard-list"></i>Checklist preventivo
+    </div>
+    <i class="fas fa-chevron-down m-section-chevron"></i>
+  </div>
+  <div class="m-section-body">
+    <form id="formChecklist">
+      {% for item in checklist_items %}
+      {% set resp = respuestas_map.get(item.id) %}
+      <div class="m-checklist-item">
+        <div class="m-checklist-desc">{{ loop.index }}. {{ item.descripcion }}</div>
+        {% if item.tipoRespuesta == 'ok_nok' %}
+        <div class="m-checklist-opts">
+          <button type="button" class="m-checklist-opt ok {% if resp and resp.respuesta == 'ok' %}selected{% endif %}"
+            onclick="toggleChecklist(this, {{ item.id }}, 'ok')">
+            <i class="fas fa-check"></i> OK
+          </button>
+          <button type="button" class="m-checklist-opt nok {% if resp and resp.respuesta == 'nok' %}selected{% endif %}"
+            onclick="toggleChecklist(this, {{ item.id }}, 'nok')">
+            <i class="fas fa-times"></i> NOK
+          </button>
+        </div>
+        <textarea class="m-checklist-obs" id="obs-{{ item.id }}"
+          placeholder="Observaciones…">{{ resp.observaciones if resp else '' }}</textarea>
+        {% elif item.tipoRespuesta == 'valor' %}
+        <input type="number" class="m-input" id="val-{{ item.id }}"
+          placeholder="Valor{% if item.unidad %} ({{ item.unidad }}){% endif %}"
+          value="{{ resp.respuesta if resp else '' }}" step="any">
+        {% else %}
+        <textarea class="m-checklist-obs" id="txt-{{ item.id }}"
+          placeholder="Respuesta…">{{ resp.respuesta if resp else '' }}</textarea>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </form>
+    {% if ot.estado not in ['cerrada', 'cancelada'] %}
+    <button class="m-btn m-btn-primary m-btn-full" style="margin-top:12px" onclick="guardarChecklist()">
+      <i class="fas fa-save"></i> Guardar checklist
+    </button>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{# ---- SECCIÓN: Histórico del equipo (solo si hay equipo asignado) ---- #}
+{% if ot.equipoTipo or ot.maquinaId %}
+{% if historico_equipo %}
+<div class="m-section" id="sec-historico">
+  <div class="m-section-header">
+    <div class="m-section-header-left">
+      <i class="fas fa-history"></i>
+      Histórico del equipo
+      <span class="m-badge" style="background:var(--m-primary-light);color:var(--m-primary);margin-left:6px">
+        {{ historico_equipo|length }}
+      </span>
+    </div>
+    <i class="fas fa-chevron-down m-section-chevron"></i>
+  </div>
+  <div class="m-section-body">
+    {% for h in historico_equipo %}
+    <div class="m-historico-item">
+      <div class="m-historico-header">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="m-historico-num">{{ h.numero }}</span>
+          <span class="m-badge m-badge-tipo-{{ h.tipo }}">{{ h.tipo }}</span>
+        </div>
+        <span class="m-text-small m-text-muted">
+          {{ h.fechaFin.strftime('%d/%m/%Y') if h.fechaFin else (h.fechaCreacion.strftime('%d/%m/%Y') if h.fechaCreacion
+          else '—') }}
+        </span>
+      </div>
+      {% if h.descripcionProblema %}
+      <div class="m-historico-problema">
+        <span class="m-historico-label">Problema</span>
+        {{ h.descripcionProblema }}
+      </div>
+      {% endif %}
+      {% if h.descripcionSolucion %}
+      <div class="m-historico-solucion">
+        <span class="m-historico-label">Solución</span>
+        {{ h.descripcionSolucion }}
+      </div>
+      {% else %}
+      <div class="m-historico-solucion m-historico-sin-sol">
+        <span class="m-historico-label">Solución</span>
+        <em>Sin registrar</em>
+      </div>
+      {% endif %}
+      <div class="m-historico-meta">
+        {% if h.tecnicoAsignado %}<span><i class="fas fa-user"></i> {{ h.tecnicoAsignado }}</span>{% endif %}
+        {% if h.tiempoReal %}<span><i class="fas fa-clock"></i> {{ '%.1f' % h.tiempoReal }} h</span>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+{# Mostrar aviso aunque no haya histórico, para que se vea que se ha buscado #}
+<div class="m-section" id="sec-historico">
+  <div class="m-section-header">
+    <div class="m-section-header-left">
+      <i class="fas fa-history"></i>
+      Histórico del equipo
+    </div>
+    <i class="fas fa-chevron-down m-section-chevron"></i>
+  </div>
+  <div class="m-section-body">
+    <div class="m-empty" style="padding:16px 0">
+      <i class="fas fa-check-circle" style="font-size:1.8rem"></i>
+      <div class="m-empty-title">Sin intervenciones previas</div>
+      <div class="m-empty-sub">No hay órdenes cerradas anteriores para este equipo</div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endif %}{# fin if equipo asignado #}
+
+{# ---- SECCIÓN: Solución y observaciones ---- #}
+{% if ot.estado not in ['cerrada', 'cancelada'] %}
+<div class="m-section" id="sec-solucion">
+  <div class="m-section-header">
+    <div class="m-section-header-left">
+      <i class="fas fa-wrench"></i>Solución / Observaciones
+    </div>
+    <i class="fas fa-chevron-down m-section-chevron"></i>
+  </div>
+  <div class="m-section-body">
+    <div class="m-field">
+      <label class="m-label">Descripción de la solución</label>
+      <textarea class="m-textarea" id="descripcionSolucion" rows="3"
+        placeholder="Describe la solución aplicada…">{{ ot.descripcionSolucion or '' }}</textarea>
+    </div>
+    <div class="m-field" style="margin-top:10px">
+      <label class="m-label">Observaciones</label>
+      <textarea class="m-textarea" id="observaciones" rows="2"
+        placeholder="Observaciones adicionales…">{{ ot.observaciones or '' }}</textarea>
+    </div>
+    <button class="m-btn m-btn-secondary m-btn-full" style="margin-top:10px" onclick="guardarSolucion()">
+      <i class="fas fa-save"></i> Guardar
+    </button>
+  </div>
+</div>
+
+{# ---- Acciones de estado ---- #}
+<div class="m-section" id="sec-acciones">
+  <div class="m-section-header">
+    <div class="m-section-header-left">
+      <i class="fas fa-tasks"></i>Acciones
+    </div>
+    <i class="fas fa-chevron-down m-section-chevron"></i>
+  </div>
+  <div class="m-section-body">
+    {% if ot.estado == 'pendiente' %}
+    <button class="m-btn m-btn-primary m-btn-full" style="margin-bottom:8px" onclick="cambiarEstado('asignada')">
+      <i class="fas fa-user-check"></i> Asignarme esta OT
+    </button>
+    {% endif %}
+
+    {% if ot.estado in ['pendiente', 'asignada', 'en_curso'] %}
+    {% if tecnico_puede_cerrar %}
+    <button class="m-btn m-btn-success m-btn-full" onclick="confirmarCerrar('cerrada')">
+      <i class="fas fa-check-circle"></i> Cerrar orden de trabajo
+    </button>
+    {% else %}
+    <button class="m-btn m-btn-success m-btn-full" onclick="confirmarCerrar('cerrado_parcial')">
+      <i class="fas fa-flag-checkered"></i> Finalizar trabajo
+    </button>
+    <p class="m-text-muted m-text-small" style="margin-top:6px;text-align:center">
+      El cierre definitivo lo realizará el responsable
+    </p>
+    {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+{# ---- Modal: Registrar consumo ---- #}
+<div class="m-modal-overlay" id="modalConsumo">
+  <div class="m-modal">
+    <div class="m-modal-header">
+      <span class="m-modal-title"><i class="fas fa-box-open"></i> Registrar material</span>
+      <button class="m-modal-close" onclick="cerrarModalConsumo()"><i class="fas fa-times"></i></button>
+    </div>
+
+    <div class="m-form">
+      <div class="m-field">
+        <label class="m-label">Buscar recambio</label>
+        <div class="m-search-box">
+          <input type="text" class="m-input" id="buscarRecambio" placeholder="Nombre o código…"
+            oninput="buscarRecambios()">
+        </div>
+        <div id="resultadosRecambio"></div>
+      </div>
+
+      <div id="recambioSeleccionado" style="display:none">
+        <div class="m-field">
+          <label class="m-label">Recambio seleccionado</label>
+          <div id="recambioNombre"
+            style="font-weight:600;padding:8px;background:var(--m-primary-light);border-radius:8px;font-size:.88rem">
+          </div>
+        </div>
+        <div class="m-field">
+          <label class="m-label">Cantidad</label>
+          <input type="number" class="m-input" id="cantidadConsumo" min="0" step="any" value="1" placeholder="1">
+        </div>
+        <input type="hidden" id="recambioIdConsumo">
+        <button class="m-btn m-btn-primary m-btn-full" onclick="registrarConsumo()">
+          <i class="fas fa-check"></i> Registrar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ---- Modal: Confirmar cierre ---- #}
+<div class="m-modal-overlay" id="modalCerrar">
+  <div class="m-modal">
+    <div class="m-modal-header">
+      <span class="m-modal-title" id="modalCerrarTitulo"><i class="fas fa-flag-checkered"></i> Finalizar trabajo</span>
+      <button class="m-modal-close" onclick="cerrarModal('modalCerrar')"><i class="fas fa-times"></i></button>
+    </div>
+    <p id="modalCerrarTexto" style="font-size:.88rem;color:var(--m-text-muted);margin-bottom:16px">
+      ¿Confirmas que has finalizado el trabajo en la orden <strong>{{ ot.numero }}</strong>?
+      {% if ot.tipo == 'preventivo' %}Se generará automáticamente la siguiente OT preventiva.{% endif %}
+    </p>
+    <div class="m-btn-group">
+      <button class="m-btn m-btn-secondary" onclick="cerrarModal('modalCerrar')">Cancelar</button>
+      <button class="m-btn m-btn-success" id="btnConfirmarCierre" onclick="cerrarOT()">
+        <i class="fas fa-check"></i> Confirmar
+      </button>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const OT_ID = {{ ot.id }};
+  const TECNICO = "{{ nombre_tecnico | e }}";
+  let timerInterval = null;
+  let timerStart = null;
+  {% if trabajo_activo %}
+  // Calcular tiempo transcurrido desde inicio de sesión activa
+  timerStart = new Date("{{ trabajo_activo.inicio.isoformat() }}");
+  iniciarTimer();
+  {% endif %}
+
+  // ---- Tareas: progreso visual ----
+  function actualizarProgresoTareas() {
+    const total = document.querySelectorAll('.m-tarea-cb').length;
+    if (!total) return;
+    const done = document.querySelectorAll('.m-tarea-cb:checked').length;
+    const pct = Math.round(done / total * 100);
+    const fill = document.getElementById('tareaProgresoFill');
+    const txt = document.getElementById('tareaProgresoTxt');
+    if (fill) fill.style.width = pct + '%';
+    if (txt) txt.textContent = `${done} / ${total}`;
+  }
+
+  function toggleTarea(cb) {
+    const tareaId = cb.dataset.id;
+    const method = cb.checked ? 'POST' : 'DELETE';
+    cb.disabled = true;
+
+    fetch(`/movil/api/ot/${OT_ID}/tarea/${tareaId}`, { method })
+      .then(r => r.json())
+      .then(() => {
+        cb.closest('.m-tarea-item').classList.toggle('done', cb.checked);
+        actualizarProgresoTareas();
+      })
+      .catch(() => {
+        // Revertir si falla
+        cb.checked = !cb.checked;
+        mToast('Error al guardar', 'error');
+      })
+      .finally(() => { cb.disabled = false; });
+  }
+
+  // Inicializar estado al cargar (por si hay tareas ya completadas en sesión anterior)
+  document.addEventListener('DOMContentLoaded', actualizarProgresoTareas);
+
+  // ---- Timer ----
+  function iniciarTimer() {
+    if (timerInterval) clearInterval(timerInterval);
+    timerInterval = setInterval(() => {
+      const elapsed = new Date() - timerStart;
+      const h = Math.floor(elapsed / 3600000).toString().padStart(2, '0');
+      const m = Math.floor((elapsed % 3600000) / 60000).toString().padStart(2, '0');
+      const s = Math.floor((elapsed % 60000) / 1000).toString().padStart(2, '0');
+      const el = document.getElementById('timerDisplay');
+      if (el) el.innerHTML = `<span style="color:var(--m-success)">${h}:${m}:${s}</span>`;
+    }, 1000);
+  }
+
+  // ---- Iniciar / Pausar trabajo ----
+  function iniciarTrabajo() {
+    fetchAPI(`/api/orden/${OT_ID}/iniciar`, 'POST', { tecnico: TECNICO })
+      .then(d => {
+        mToast('Trabajo iniciado', 'success');
+        setTimeout(() => location.reload(), 800);
+      })
+      .catch(e => mToast(e, 'error'));
+  }
+
+  function pausarTrabajo() {
+    fetchAPI(`/api/orden/${OT_ID}/pausar`, 'POST', { tecnico: TECNICO })
+      .then(d => {
+        mToast(`Sesión: ${d.duracionSesion} h`, 'success');
+        setTimeout(() => location.reload(), 800);
+      })
+      .catch(e => mToast(e, 'error'));
+  }
+
+  // ---- Cambiar estado ----
+  function cambiarEstado(nuevoEstado, extra) {
+    const body = { estado: nuevoEstado, cerradoPor: TECNICO, ...(extra || {}) };
+    fetchAPI(`/api/orden/${OT_ID}/estado`, 'PUT', body)
+      .then(d => {
+        mToast(d.mensaje || 'Estado actualizado', 'success');
+        if (d.nuevaOT) mToast(`Nueva OT: ${d.nuevaOT}`, 'success');
+        setTimeout(() => location.reload(), 1000);
+      })
+      .catch(e => mToast(e, 'error'));
+  }
+
+  let _estadoCierre = 'cerrado_parcial';
+
+  function confirmarCerrar(estado) {
+    _estadoCierre = estado || 'cerrado_parcial';
+    const esCerradaTotal = _estadoCierre === 'cerrada';
+    document.getElementById('modalCerrarTitulo').innerHTML = esCerradaTotal
+      ? '<i class="fas fa-check-circle"></i> Cerrar orden de trabajo'
+      : '<i class="fas fa-flag-checkered"></i> Finalizar trabajo';
+    abrirModal('modalCerrar');
+  }
+
+  function cerrarOT() {
+    cerrarModal('modalCerrar');
+    // Guardar solución antes de cerrar
+    const sol = document.getElementById('descripcionSolucion');
+    const obs = document.getElementById('observaciones');
+    const updates = {};
+    if (sol && sol.value.trim()) updates.descripcionSolucion = sol.value.trim();
+    if (obs && obs.value.trim()) updates.observaciones = obs.value.trim();
+
+    const cerrar = () => cambiarEstado(_estadoCierre);
+    if (Object.keys(updates).length > 0) {
+      fetchAPI(`/api/orden/${OT_ID}`, 'PUT', updates)
+        .then(cerrar).catch(cerrar);
+    } else {
+      cerrar();
+    }
+  }
+
+  // ---- Solución / observaciones ----
+  function guardarSolucion() {
+    const sol = document.getElementById('descripcionSolucion').value.trim();
+    const obs = document.getElementById('observaciones').value.trim();
+    fetchAPI(`/api/orden/${OT_ID}`, 'PUT', {
+      descripcionSolucion: sol,
+      observaciones: obs
+    })
+      .then(() => mToast('Guardado', 'success'))
+      .catch(e => mToast(e, 'error'));
+  }
+
+  // ---- Consumos ----
+  let recambioTimer = null;
+  function abrirModalConsumo() {
+    document.getElementById('buscarRecambio').value = '';
+    document.getElementById('resultadosRecambio').innerHTML = '';
+    document.getElementById('recambioSeleccionado').style.display = 'none';
+    abrirModal('modalConsumo');
+  }
+  function cerrarModalConsumo() { cerrarModal('modalConsumo'); }
+
+  function buscarRecambios() {
+    clearTimeout(recambioTimer);
+    recambioTimer = setTimeout(() => {
+      const q = document.getElementById('buscarRecambio').value.trim();
+      if (q.length < 2) { document.getElementById('resultadosRecambio').innerHTML = ''; return; }
+      fetch(`/movil/api/recambios?q=${encodeURIComponent(q)}`)
+        .then(r => r.json())
+        .then(items => {
+          const el = document.getElementById('resultadosRecambio');
+          if (!items.length) { el.innerHTML = '<p class="m-text-muted m-text-center" style="padding:10px 0">Sin resultados</p>'; return; }
+          el.innerHTML = items.map(i => `
+          <div class="m-recambio-result" onclick="seleccionarRecambio(${i.id}, '${escHtml(i.nombre)} (${escHtml(i.codigo)})', ${i.stockActual})">
+            <div>
+              <div class="m-recambio-nombre">${escHtml(i.nombre)}</div>
+              <div class="m-recambio-codigo">${escHtml(i.codigo)}</div>
+            </div>
+            <div class="m-recambio-stock">Stock: ${i.stockActual} ${escHtml(i.unidadMedida || '')}</div>
+          </div>`).join('');
+        });
+    }, 300);
+  }
+
+  function seleccionarRecambio(id, nombre, stock) {
+    document.getElementById('recambioIdConsumo').value = id;
+    document.getElementById('recambioNombre').textContent = nombre + ' — Stock: ' + stock;
+    document.getElementById('cantidadConsumo').max = stock;
+    document.getElementById('recambioSeleccionado').style.display = 'block';
+    document.getElementById('resultadosRecambio').innerHTML = '';
+  }
+
+  function registrarConsumo() {
+    const recambioId = parseInt(document.getElementById('recambioIdConsumo').value);
+    const cantidad = parseFloat(document.getElementById('cantidadConsumo').value);
+    if (!recambioId || !cantidad || cantidad < 1) { mToast('Rellena todos los campos', 'error'); return; }
+    fetchAPI(`/api/orden/${OT_ID}/consumo`, 'POST', { recambioId, cantidad })
+      .then(() => {
+        mToast('Material registrado', 'success');
+        cerrarModalConsumo();
+        setTimeout(() => location.reload(), 800);
+      })
+      .catch(e => mToast(e, 'error'));
+  }
+
+  // ---- Checklist ----
+  const checklistState = {};
+  function toggleChecklist(btn, itemId, valor) {
+    const parent = btn.closest('.m-checklist-opts');
+    parent.querySelectorAll('.m-checklist-opt').forEach(b => b.classList.remove('selected'));
+    btn.classList.add('selected');
+    checklistState[itemId] = { respuesta: valor };
+  }
+
+  function guardarChecklist() {
+    const respuestas = [];
+    document.querySelectorAll('.m-checklist-item').forEach(item => {
+      const okBtn = item.querySelector('.m-checklist-opt.ok');
+      const nokBtn = item.querySelector('.m-checklist-opt.nok');
+      const obsEl = item.querySelector('.m-checklist-obs');
+      const valEl = item.querySelector('input[type=number]');
+      const txtEl = item.querySelector('textarea:not(.m-checklist-obs)');
+
+      // Obtener item id del textarea/obs id
+      let itemId = null;
+      if (obsEl) itemId = obsEl.id.replace('obs-', '');
+      if (valEl) itemId = valEl.id.replace('val-', '');
+      if (txtEl) itemId = txtEl.id.replace('txt-', '');
+      if (!itemId) return;
+
+      let respuesta = '';
+      let observaciones = '';
+      if (okBtn && nokBtn) {
+        if (okBtn.classList.contains('selected')) respuesta = 'ok';
+        if (nokBtn.classList.contains('selected')) respuesta = 'nok';
+        observaciones = obsEl ? obsEl.value.trim() : '';
+      } else if (valEl) {
+        respuesta = valEl.value.trim();
+      } else if (txtEl) {
+        respuesta = txtEl.value.trim();
+      }
+
+      if (respuesta) respuestas.push({ checklistItemId: parseInt(itemId), respuesta, observaciones });
+    });
+
+    if (!respuestas.length) { mToast('No hay respuestas marcadas', 'error'); return; }
+    fetchAPI(`/api/orden/${OT_ID}/checklist`, 'POST', { respuestas })
+      .then(() => mToast('Checklist guardado', 'success'))
+      .catch(e => mToast(e, 'error'));
+  }
+
+  // ---- Modales ----
+  function abrirModal(id) { document.getElementById(id).classList.add('open'); }
+  function cerrarModal(id) { document.getElementById(id).classList.remove('open'); }
+
+  // Cerrar modal al click fuera
+  document.querySelectorAll('.m-modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) overlay.classList.remove('open');
+    });
+  });
+
+  // ---- Util ----
+  function escHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function fetchAPI(url, method, body) {
+    return fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body ? JSON.stringify(body) : undefined
+    }).then(async r => {
+      const data = await r.json();
+      if (!r.ok) throw data.error || JSON.stringify(data);
+      return data;
+    });
+  }
+</script>
+{% endblock %}

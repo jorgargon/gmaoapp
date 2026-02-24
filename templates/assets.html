@@ -1,0 +1,896 @@
+{% extends "base.html" %}
+
+{% block rightMenu %}
+<!-- Botones de acción específicos de Equipos -->
+{% if current_user and current_user.nivel != 'tecnico' %}
+<button class="rightbarAction primary" onclick="mostrarFormularioEntidad()" title="Añadir nuevo equipo">
+    <span class="actionCircle"><i class="fas fa-plus"></i></span>
+    <span class="actionLabel">Nuevo</span>
+</button>
+{% endif %}
+<button class="rightbarAction" onclick="refreshTree()" title="Actualizar árbol">
+    <span class="actionCircle"><i class="fas fa-sync-alt"></i></span>
+    <span class="actionLabel">Recargar</span>
+</button>
+<div class="rightbarDivider"></div>
+<button class="rightbarAction" onclick="editarEntidad()" title="Editar seleccionado" id="btnEditar"
+    style="display: none;">
+    <span class="actionCircle"><i class="fas fa-edit"></i></span>
+    <span class="actionLabel">Editar</span>
+</button>
+<button class="rightbarAction danger" onclick="eliminarEntidad()" title="Eliminar seleccionado" id="btnEliminar"
+    style="display: none;">
+    <span class="actionCircle"><i class="fas fa-trash"></i></span>
+    <span class="actionLabel">Eliminar</span>
+</button>
+<div class="rightbarDivider" id="dividerAcciones" style="display: none;"></div>
+<button class="rightbarAction warning" onclick="crearOTDesdeRightbar()" title="Crear OT para equipo seleccionado"
+    id="btnNuevaOT" style="display: none;">
+    <span class="actionCircle"><i class="fas fa-wrench"></i></span>
+    <span class="actionLabel">Nueva OT</span>
+</button>
+{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
+<script src="{{ url_for('static', filename='js/ordenes-common.js') }}"></script>
+
+<div class="pageHeader">
+    <h2><i class="fas fa-cogs"></i> Gestión de Equipos</h2>
+    <div class="pageActions">
+        {% if current_user and current_user.nivel != 'tecnico' %}
+        <button class="btn btnPrimary" onclick="mostrarFormularioEntidad()">
+            <i class="fas fa-plus"></i> Nuevo Equipo
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<div class="assetsContainer">
+    <!-- Árbol de navegación -->
+    <div class="treePanel">
+        <div class="panelHeader">
+            <h3>Estructura de Activos</h3>
+            <button class="btnIcon" onclick="refreshTree()" title="Actualizar">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+        </div>
+        <div class="treeSearch">
+            <input type="text" id="searchTree" placeholder="Buscar..." class="inputSearch">
+        </div>
+        <div id="activosTree" class="activosTreePanel"></div>
+    </div>
+
+    <!-- Panel de detalles -->
+    <div class="detailsPanel">
+        <div class="panelHeader">
+            <h3 id="detailsTitle">Selecciona un elemento</h3>
+            <div class="detailsActions" id="detailsActions" style="display: none;">
+                <button class="btnIcon" onclick="editarEntidad()" title="Editar">
+                    <i class="fas fa-edit"></i>
+                </button>
+                <button class="btnIcon btnDanger" onclick="eliminarEntidad()" title="Eliminar">
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="tabsContainer">
+            <div class="tabButtons">
+                <button class="tabBtn active" data-tab="datosTab">Datos</button>
+                <button class="tabBtn" data-tab="otTab">Órdenes</button>
+                <button class="tabBtn" data-tab="preventivoTab">Preventivo</button>
+                <button class="tabBtn" data-tab="recambiosTab">Recambios</button>
+            </div>
+
+            <div class="tabContent">
+                <div id="datosTab" class="tabPane active">
+                    <div id="entidadInfo" class="infoPlaceholder">
+                        <i class="fas fa-hand-pointer"></i>
+                        <p>Selecciona un elemento del árbol para ver sus detalles</p>
+                    </div>
+                </div>
+                <div id="otTab" class="tabPane">
+                    <div id="ordenesLista"></div>
+                </div>
+                <div id="preventivoTab" class="tabPane">
+                    <div id="preventivoLista"></div>
+                </div>
+                <div id="recambiosTab" class="tabPane">
+                    <div id="recambiosLista"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let selectedNode = null;
+    let selectedTipo = null;
+    let selectedId = null;
+    // La cache de tipos ahora es global window.tiposCache
+
+    $(document).ready(async function () {
+        // Inicializar callback de refresco
+        setRefreshCallback(() => {
+            if (selectedTipo && selectedId) {
+                loadOrdenesEquipo(selectedTipo, selectedId);
+                loadPreventivoEquipo(selectedTipo, selectedId);
+            }
+        });
+
+        // Cargar tipos de intervención primero
+        await cargarTiposIntervencionAssets();
+
+        // Inicializar árbol
+        loadTree();
+
+        // Buscador del árbol
+        $('#searchTree').on('keyup', function () {
+            const searchTerm = $(this).val();
+            $('#activosTree').jstree(true).search(searchTerm);
+        });
+
+        // Sistema de tabs
+        document.querySelectorAll('.tabBtn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                document.querySelectorAll('.tabBtn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tabPane').forEach(p => p.classList.remove('active'));
+                this.classList.add('active');
+                document.getElementById(this.dataset.tab).classList.add('active');
+            });
+        });
+    });
+
+    function loadTree() {
+        $.get('/getActivosTree', function (data) {
+            const tree = $('#activosTree').jstree(true);
+            if (tree) {
+                // Guardar estado actual manualmente
+                const state = tree.get_state();
+
+                // Actualizar datos
+                tree.settings.core.data = data;
+
+                // Refrescar y restaurar estado tras el refresco
+                tree.refresh();
+
+                // Un pequeño timeout asegura que el refresco ha procesado los nuevos datos
+                setTimeout(() => {
+                    tree.set_state(state);
+                }, 100);
+            } else {
+                // Si no existe, lo inicializamos
+                $('#activosTree').jstree({
+                    core: {
+                        check_callback: true,
+                        data: data,
+                        themes: {
+                            dots: true,
+                            icons: true,
+                            variant: "default"
+                        }
+                    },
+                    plugins: ['wholerow', 'types', 'search', 'state'],
+                    state: { "key": "gmao_assets_tree" },
+                    search: {
+                        show_only_matches: true,
+                        show_only_matches_children: true
+                    },
+                    types: {
+                        default: { icon: false }
+                    }
+                });
+
+                $('#activosTree').on('select_node.jstree', function (e, data) {
+                    selectedNode = data.node;
+                    const nodeId = data.node.id;
+                    selectedTipo = nodeId.split('-')[0];
+                    selectedId = nodeId.split('-')[1];
+
+                    loadEntityDetails(selectedTipo, selectedId);
+                    document.getElementById('detailsActions').style.display = 'flex';
+
+                    // Mostrar botones contextuales en el rightbar según nivel
+                    if (window.USER_NIVEL !== 'tecnico') {
+                        document.getElementById('btnEditar').style.display = 'flex';
+                        document.getElementById('btnEliminar').style.display = 'flex';
+                        document.getElementById('dividerAcciones').style.display = 'block';
+                    }
+
+                    // Mostrar botón de OT para cualquier entidad
+                    document.getElementById('btnNuevaOT').style.display = 'flex';
+                });
+            }
+        });
+    }
+
+    function refreshTree() {
+        loadTree();
+        showToast('Árbol actualizado', 'success');
+    }
+
+    function loadEntityDetails(tipo, id) {
+        $.get(`/getEntidadDetails/${tipo}/${id}`, function (data) {
+            $('#detailsTitle').text(data.nombre);
+
+            let html = `
+            <div class="infoGrid">
+                <div class="infoItem">
+                    <label>Código</label>
+                    <span class="codigoTag">${data.codigo}</span>
+                </div>
+                <div class="infoItem">
+                    <label>Tipo</label>
+                    <span>${tipo.charAt(0).toUpperCase() + tipo.slice(1)}</span>
+                </div>
+                ${data.descripcion ? `<div class="infoItem full"><label>Descripción</label><span>${data.descripcion}</span></div>` : ''}
+        `;
+
+            if (data.modelo) html += `<div class="infoItem"><label>Modelo</label><span>${data.modelo}</span></div>`;
+            if (data.fabricante) html += `<div class="infoItem"><label>Fabricante</label><span>${data.fabricante}</span></div>`;
+            if (data.numeroSerie) html += `<div class="infoItem"><label>Nº Serie</label><span>${data.numeroSerie}</span></div>`;
+            if (data.criticidad) html += `<div class="infoItem"><label>Criticidad</label><span class="tag tag-${data.criticidad}">${data.criticidad}</span></div>`;
+            if (data.estado) html += `<div class="infoItem"><label>Estado</label><span class="tag tag-${data.estado}">${data.estado}</span></div>`;
+            if (data.horasOperacion !== undefined) html += `<div class="infoItem"><label>Horas Operación</label><span>${formatoEspanol(data.horasOperacion, 0)} h</span></div>`;
+            if (data.fechaInstalacion) html += `<div class="infoItem"><label>Fecha Instalación</label><span>${new Date(data.fechaInstalacion).toLocaleDateString('es-ES')}</span></div>`;
+            if (data.rav !== undefined && data.rav > 0) html += `<div class="infoItem"><label>Valor Reposición</label><span>${parseFloat(data.rav).toLocaleString('es-ES')} €</span></div>`;
+
+            html += '</div>';
+
+            // Mostrar acciones rápidas solo para máquinas (Cambiar Estado)
+            if (tipo === 'maquina') {
+                html += `
+                <div class="quickActions">
+                    <button class="btn btnSuccess btnSm" onclick="cambiarEstadoMaquina(${id})">
+                        <i class="fas fa-toggle-on"></i> Cambiar Estado
+                    </button>
+                </div>
+                `;
+            }
+
+            // Cargar órdenes para cualquier entidad del árbol
+            loadOrdenesEquipo(tipo, id);
+            loadPreventivoEquipo(tipo, id);
+
+            $('#entidadInfo').html(html);
+        });
+    }
+
+    function loadOrdenesEquipo(equipoTipo, equipoId) {
+        $.get(`/api/ordenes?equipoTipo=${equipoTipo}&equipoId=${equipoId}&incluirCerradas=true`, function (ordenes) {
+            if (ordenes.length === 0) {
+                $('#ordenesLista').html('<p class="emptyState">Sin órdenes de trabajo</p>');
+                return;
+            }
+
+            // Separar órdenes activas e históricas
+            const activas = ordenes.filter(o => o.estado === 'pendiente' || o.estado === 'asignada' || o.estado === 'en_curso');
+            const historicas = ordenes.filter(o => o.estado === 'cerrada' || o.estado === 'cancelada');
+
+            let html = '';
+
+            // Tabla de órdenes activas
+            html += '<h4 class="ordenesSeccionTitulo"><i class="fas fa-clock"></i> Órdenes Activas</h4>';
+            if (activas.length === 0) {
+                html += '<p class="emptyState small">Sin órdenes pendientes o en curso</p>';
+            } else {
+                html += `
+                <table class="dataTable ordenesEquipoTable">
+                    <thead>
+                        <tr>
+                            <th>Nº Orden</th>
+                            <th>Tipo</th>
+                            <th>Avería / Título</th>
+                            <th>Fecha Apertura</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                `;
+                activas.forEach(o => {
+                    const fechaApertura = o.fechaCreacion ? new Date(o.fechaCreacion).toLocaleDateString('es-ES') : '-';
+                    const fechaPrevista = o.fechaProgramada ? `<br><small>Prevista: ${new Date(o.fechaProgramada).toLocaleDateString('es-ES')}</small>` : '';
+                    html += `
+                        <tr class="row-${o.estado}" onclick="verOrden(${o.id})" style="cursor: pointer;">
+                            <td><span class="codigoTag">${o.numero}</span></td>
+                            <td>${renderTipoIcono(o.tipo)}</td>
+                            <td>${o.titulo}${o.tipo === 'preventivo' ? fechaPrevista : ''}</td>
+                            <td>${fechaApertura}</td>
+                            <td><span class="estado-${o.estado}">${formatEstado(o.estado)}</span></td>
+                        </tr>
+                    `;
+                });
+                html += '</tbody></table>';
+            }
+
+            // Tabla de historial
+            html += '<h4 class="ordenesSeccionTitulo historial"><i class="fas fa-history"></i> Historial de Órdenes</h4>';
+            if (historicas.length === 0) {
+                html += '<p class="emptyState small">Sin historial de órdenes</p>';
+            } else {
+                html += `
+                <table class="dataTable ordenesEquipoTable">
+                    <thead>
+                        <tr>
+                            <th>Nº Orden</th>
+                            <th>Tipo</th>
+                            <th>Avería / Título</th>
+                            <th>Fecha Apertura</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                `;
+                historicas.slice(0, 20).forEach(o => {
+                    const fechaApertura = o.fechaCreacion ? new Date(o.fechaCreacion).toLocaleDateString('es-ES') : '-';
+                    html += `
+                        <tr class="row-${o.estado}" onclick="verOrden(${o.id})" style="cursor: pointer;">
+                            <td><span class="codigoTag">${o.numero}</span></td>
+                            <td>${renderTipoIcono(o.tipo)}</td>
+                            <td>${o.titulo}</td>
+                            <td>${fechaApertura}</td>
+                            <td><span class="estado-${o.estado}">${formatEstado(o.estado)}</span></td>
+                        </tr>
+                    `;
+                });
+                html += '</tbody></table>';
+                if (historicas.length > 20) {
+                    html += `<p class="textMuted" style="margin-top: 8px; font-size: 12px;">Mostrando últimas 20 de ${historicas.length} órdenes</p>`;
+                }
+            }
+
+            $('#ordenesLista').html(html);
+        });
+    }
+
+
+
+    function loadPreventivoEquipo(equipoTipo, equipoId) {
+        // Cargar órdenes de tipo preventivo para este equipo
+        $.get(`/api/ordenes?equipoTipo=${equipoTipo}&equipoId=${equipoId}&tipo=preventivo&incluirCerradas=true`, function (ordenes) {
+            if (ordenes.length === 0) {
+                $('#preventivoLista').html('<p class="emptyState">Sin órdenes de mantenimiento preventivo</p>');
+                return;
+            }
+
+            // Separar activas e históricas
+            const activas = ordenes.filter(o => o.estado === 'pendiente' || o.estado === 'asignada' || o.estado === 'en_curso');
+            const historicas = ordenes.filter(o => o.estado === 'cerrada' || o.estado === 'cancelada');
+
+            let html = '';
+
+            // Próximas/activas
+            html += '<h4 class="ordenesSeccionTitulo"><i class="fas fa-calendar-check"></i> Preventivo Pendiente</h4>';
+            if (activas.length === 0) {
+                html += '<p class="emptyState small">Sin preventivo pendiente</p>';
+            } else {
+                html += `
+                <table class="dataTable ordenesEquipoTable">
+                    <thead>
+                        <tr>
+                            <th>Nº Orden</th>
+                            <th>Título</th>
+                            <th>Fecha Prevista</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                `;
+                activas.forEach(o => {
+                    const fechaPrevista = o.fechaProgramada ? new Date(o.fechaProgramada).toLocaleDateString('es-ES') : '-';
+                    html += `
+                        <tr class="row-${o.estado}" onclick="verOrden(${o.id})" style="cursor: pointer;">
+                            <td><span class="codigoTag">${o.numero}</span></td>
+                            <td>${o.titulo}</td>
+                            <td>${fechaPrevista}</td>
+                            <td><span class="estado-${o.estado}">${formatEstado(o.estado)}</span></td>
+                        </tr>
+                    `;
+                });
+                html += '</tbody></table>';
+            }
+
+            // Historial preventivo
+            html += '<h4 class="ordenesSeccionTitulo historial"><i class="fas fa-history"></i> Historial Preventivo</h4>';
+            if (historicas.length === 0) {
+                html += '<p class="emptyState small">Sin historial de preventivo</p>';
+            } else {
+                html += `
+                <table class="dataTable ordenesEquipoTable">
+                    <thead>
+                        <tr>
+                            <th>Nº Orden</th>
+                            <th>Título</th>
+                            <th>Fecha Ejecución</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                `;
+                historicas.slice(0, 15).forEach(o => {
+                    const fechaCierre = o.fechaFin ? new Date(o.fechaFin).toLocaleDateString('es-ES') : '-';
+                    html += `
+                        <tr class="row-${o.estado}" onclick="verOrden(${o.id})" style="cursor: pointer;">
+                            <td><span class="codigoTag">${o.numero}</span></td>
+                            <td>${o.titulo}</td>
+                            <td>${fechaCierre}</td>
+                            <td><span class="estado-${o.estado}">${formatEstado(o.estado)}</span></td>
+                        </tr>
+                    `;
+                });
+                html += '</tbody></table>';
+            }
+
+            $('#preventivoLista').html(html);
+        });
+    }
+
+    // =========================================
+    // FUNCIONES HELPER PARA TIPOS DE INTERVENCIÓN
+    // =========================================
+
+    async function cargarTiposIntervencionAssets() {
+        try {
+            window.tiposCache = await $.get('/api/tipos-intervencion');
+        } catch (error) {
+            window.tiposCache = [
+                { codigo: 'correctivo', nombre: 'Correctivo', icono: 'fa-wrench', color: '#e53935' },
+                { codigo: 'preventivo', nombre: 'Preventivo', icono: 'fa-calendar-check', color: '#43a047' }
+            ];
+        }
+    }
+
+    function getTipoInfoAssets(codigo) {
+        return window.tiposCache.find(t => t.codigo === codigo) || { nombre: codigo, icono: 'fa-wrench', color: '#666' };
+    }
+
+    function renderTipoIcono(tipoCodigo) {
+        const tipo = getTipoInfoAssets(tipoCodigo);
+        return `<span class="tipoIcono custom-tooltip" style="color: ${tipo.color};" data-tooltip="${tipo.nombre}"><i class="fas ${tipo.icono}"></i></span>`;
+    }
+
+    function mostrarFormularioEntidad() {
+        const tiposJerarquia = {
+            'empresa': { hijo: 'planta', label: 'Planta' },
+            'planta': { hijo: 'zona', label: 'Zona' },
+            'zona': { hijo: 'linea', label: 'Línea' },
+            'linea': { hijo: 'maquina', label: 'Máquina' },
+            'maquina': { hijo: 'elemento', label: 'Elemento' }
+        };
+
+        // Detectar tipo de hijo a crear basado en el nodo seleccionado
+        let tipoPreseleccionado = '';
+        let tituloModal = 'Nuevo Equipo';
+        let parenteInfo = '';
+
+        if (selectedTipo && selectedId && tiposJerarquia[selectedTipo]) {
+            tipoPreseleccionado = tiposJerarquia[selectedTipo].hijo;
+            tituloModal = `Nueva ${tiposJerarquia[selectedTipo].label}`;
+            parenteInfo = `<p><i class="fas fa-info-circle"></i> Se creará bajo: <strong>${selectedNode.text}</strong></p>`;
+        }
+
+        const tipos = [
+            { value: 'empresa', label: 'Empresa', parent: null },
+            { value: 'planta', label: 'Planta', parent: 'empresa' },
+            { value: 'zona', label: 'Zona', parent: 'planta' },
+            { value: 'linea', label: 'Línea', parent: 'zona' },
+            { value: 'maquina', label: 'Máquina', parent: 'linea' },
+            { value: 'elemento', label: 'Elemento', parent: 'maquina' }
+        ];
+
+        let html = `
+        <form id="formEntidad">
+            ${parenteInfo ? `<div class="alert alert-info">${parenteInfo}</div>` : ''}
+            <div class="formGroup" id="selectorTipo" style="${tipoPreseleccionado ? 'display: none;' : ''}">
+                <label>Tipo de Equipo</label>
+                <select id="tipoEntidad" class="formControl" onchange="updateParentSelector()" required>
+                    <option value="">Seleccionar...</option>
+                    ${tipos.map(t => `<option value="${t.value}" ${t.value === tipoPreseleccionado ? 'selected' : ''}>${t.label}</option>`).join('')}
+                </select>
+            </div>
+            <input type="hidden" id="tipoEntidadHidden" value="${tipoPreseleccionado}">
+            <div id="parentSelector" style="display: none;"></div>
+            <div class="formGroup">
+                <label>Código</label>
+                <input type="text" id="entidadCodigo" class="formControl" required maxlength="10">
+            </div>
+            <div class="formGroup">
+                <label>Nombre</label>
+                <input type="text" id="entidadNombre" class="formControl" required>
+            </div>
+            <div class="formGroup">
+                <label>Descripción</label>
+                <textarea id="entidadDescripcion" class="formControl" rows="3"></textarea>
+            </div>
+            <div id="camposAdicionales"></div>
+        </form>
+    `;
+
+        const footer = `
+        <button class="btn btnSecondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn btnPrimary" onclick="guardarEntidad()">Guardar</button>
+    `;
+
+        openModal(tituloModal, html, footer);
+
+        // Si hay tipo preseleccionado, actualizar campos adicionales
+        if (tipoPreseleccionado) {
+            setTimeout(() => updateParentSelector(tipoPreseleccionado), 100);
+        }
+    }
+
+    function updateParentSelector(tipoForzado = null) {
+        // Obtener tipo desde el selector oculto, el forzado, o el select visible
+        const tipoHidden = document.getElementById('tipoEntidadHidden')?.value;
+        const tipoSelect = document.getElementById('tipoEntidad')?.value;
+        const tipo = tipoForzado || tipoHidden || tipoSelect;
+
+        const parentDiv = document.getElementById('parentSelector');
+        const camposDiv = document.getElementById('camposAdicionales');
+
+        // Limpiar campos adicionales
+        camposDiv.innerHTML = '';
+
+        // Si hay un nodo seleccionado y el tipo coincide con el hijo esperado, ocultar selector de padre
+        const parenteEsperado = {
+            'planta': 'empresa',
+            'zona': 'planta',
+            'linea': 'zona',
+            'maquina': 'linea',
+            'elemento': 'maquina'
+        };
+
+        if (tipo === 'empresa') {
+            parentDiv.style.display = 'none';
+        } else if (selectedId && selectedTipo && parenteEsperado[tipo] === selectedTipo) {
+            // El padre ya está seleccionado en el árbol, ocultar selector
+            parentDiv.style.display = 'none';
+        } else if (tipo === 'planta') {
+            parentDiv.style.display = 'block';
+            parentDiv.innerHTML = `
+            <div class="formGroup">
+                <label>Empresa</label>
+                <select id="parentId" class="formControl" required></select>
+            </div>
+        `;
+            fetch('/api/empresas').then(r => r.json()).then(data => {
+                const select = document.getElementById('parentId');
+                data.forEach(e => select.innerHTML += `<option value="${e.id}">${e.nombre}</option>`);
+            });
+        } else if (tipo === 'zona') {
+            parentDiv.style.display = 'block';
+            parentDiv.innerHTML = `
+            <div class="formGroup">
+                <label>Planta</label>
+                <select id="parentId" class="formControl" required></select>
+            </div>
+        `;
+            fetch('/api/plantas').then(r => r.json()).then(data => {
+                const select = document.getElementById('parentId');
+                data.forEach(p => select.innerHTML += `<option value="${p.id}">${p.nombre}</option>`);
+            });
+        } else if (['linea', 'maquina', 'elemento'].includes(tipo)) {
+            // Para niveles profundos, usamos la lista completa para mostrar la ruta
+            const parentLabel = {
+                'linea': 'Zona',
+                'maquina': 'Línea',
+                'elemento': 'Máquina'
+            }[tipo];
+
+            parentDiv.style.display = 'block';
+            parentDiv.innerHTML = `
+            <div class="formGroup">
+                <label>${parentLabel}</label>
+                <select id="parentId" class="formControl" required>
+                    <option value="">Cargando...</option>
+                </select>
+            </div>
+        `;
+
+            fetch('/api/equipos-lista').then(r => r.json()).then(data => {
+                const select = document.getElementById('parentId');
+                select.innerHTML = '<option value="">Seleccionar...</option>';
+
+                // Filtrar por el tipo de padre correspondiente
+                const parentType = parenteEsperado[tipo];
+                const options = data.filter(e => e.tipo === parentType);
+
+                options.forEach(op => {
+                    // Mostrar ruta completa para dar contexto
+                    select.innerHTML += `<option value="${op.id}">${op.ruta}</option>`;
+                });
+            });
+        }
+
+        // Campos adicionales para máquinas
+        if (tipo === 'maquina') {
+            camposDiv.innerHTML = `
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Fabricante</label>
+                    <input type="text" id="fabricante" class="formControl">
+                </div>
+                <div class="formGroup">
+                    <label>Modelo</label>
+                    <input type="text" id="modelo" class="formControl">
+                </div>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Nº Serie</label>
+                    <input type="text" id="numeroSerie" class="formControl">
+                </div>
+                <div class="formGroup">
+                    <label>Criticidad</label>
+                    <select id="criticidad" class="formControl">
+                        <option value="baja">Baja</option>
+                        <option value="media" selected>Media</option>
+                        <option value="alta">Alta</option>
+                    </select>
+                </div>
+            </div>
+            <div class="formRow">
+                <div class="formGroup" style="width: 50%;">
+                    <label>Valor Reposición (RAV) €</label>
+                    <input type="number" id="rav" class="formControl" step="0.01" min="0">
+                </div>
+            </div>
+        `;
+        } else if (tipo === 'elemento') {
+            camposDiv.innerHTML = `
+            <div class="formRow">
+                <div class="formGroup" style="width: 50%;">
+                    <label>Valor Reposición (RAV) €</label>
+                    <input type="number" id="rav" class="formControl" step="0.01" min="0">
+                </div>
+            </div>
+        `;
+        }
+    }
+
+    async function guardarEntidad() {
+        // Obtener tipo desde el campo oculto o del select visible
+        const tipoHidden = document.getElementById('tipoEntidadHidden')?.value;
+        const tipoSelect = document.getElementById('tipoEntidad')?.value;
+        const tipo = tipoHidden || tipoSelect;
+
+        const codigo = document.getElementById('entidadCodigo').value;
+        const nombre = document.getElementById('entidadNombre').value;
+        const descripcion = document.getElementById('entidadDescripcion').value;
+
+        if (!tipo || !codigo || !nombre) {
+            showToast('Completa los campos obligatorios', 'error');
+            return;
+        }
+
+        let data = { codigo, nombre, descripcion };
+        let url = `/api/${tipo}`;
+
+        // Añadir parent según el tipo
+        const parentIdEl = document.getElementById('parentId');
+        if (parentIdEl) {
+            if (tipo === 'planta') data.empresaId = parseInt(parentIdEl.value);
+            else if (tipo === 'zona') data.plantaId = parseInt(parentIdEl.value);
+            else if (tipo === 'linea') data.zonaId = parseInt(parentIdEl.value);
+            else if (tipo === 'maquina') data.lineaId = parseInt(parentIdEl.value);
+            else if (tipo === 'elemento') data.maquinaId = parseInt(parentIdEl.value);
+        } else if (selectedId && selectedTipo) {
+            // Usar el nodo seleccionado como parent
+            if (tipo === 'planta' && selectedTipo === 'empresa') data.empresaId = parseInt(selectedId);
+            else if (tipo === 'zona' && selectedTipo === 'planta') data.plantaId = parseInt(selectedId);
+            else if (tipo === 'linea' && selectedTipo === 'zona') data.zonaId = parseInt(selectedId);
+            else if (tipo === 'maquina' && selectedTipo === 'linea') data.lineaId = parseInt(selectedId);
+            else if (tipo === 'elemento' && selectedTipo === 'maquina') data.maquinaId = parseInt(selectedId);
+        }
+
+        // Campos adicionales para máquinas
+        if (tipo === 'maquina') {
+            data.fabricante = document.getElementById('fabricante')?.value || '';
+            data.modelo = document.getElementById('modelo')?.value || '';
+            data.numeroSerie = document.getElementById('numeroSerie')?.value || '';
+            data.criticidad = document.getElementById('criticidad')?.value || 'media';
+            data.rav = parseFloat(document.getElementById('rav')?.value) || 0;
+        } else if (tipo === 'elemento') {
+            data.rav = parseFloat(document.getElementById('rav')?.value) || 0;
+        }
+
+        try {
+            await apiCall(url, 'POST', data);
+            closeModal();
+            refreshTree();
+            showToast(`${tipo} creada correctamente`, 'success');
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    async function editarEntidad() {
+        if (!selectedTipo || !selectedId) return;
+
+        const data = await apiCall(`/getEntidadDetails/${selectedTipo}/${selectedId}`);
+
+        let html = `
+        <form id="formEditEntidad">
+            <div class="formGroup">
+                <label>Código</label>
+                <input type="text" id="editCodigo" class="formControl" value="${data.codigo.split('-').pop()}" required>
+            </div>
+            <div class="formGroup">
+                <label>Nombre</label>
+                <input type="text" id="editNombre" class="formControl" value="${data.nombre}" required>
+            </div>
+            <div class="formGroup">
+                <label>Descripción</label>
+                <textarea id="editDescripcion" class="formControl" rows="3">${data.descripcion || ''}</textarea>
+            </div>
+    `;
+
+        if (selectedTipo === 'maquina') {
+            html += `
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Fabricante</label>
+                    <input type="text" id="editFabricante" class="formControl" value="${data.fabricante || ''}">
+                </div>
+                <div class="formGroup">
+                    <label>Modelo</label>
+                    <input type="text" id="editModelo" class="formControl" value="${data.modelo || ''}">
+                </div>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Nº Serie</label>
+                    <input type="text" id="editNumeroSerie" class="formControl" value="${data.numeroSerie || ''}">
+                </div>
+                <div class="formGroup">
+                    <label>Criticidad</label>
+                    <select id="editCriticidad" class="formControl">
+                        <option value="baja" ${data.criticidad === 'baja' ? 'selected' : ''}>Baja</option>
+                        <option value="media" ${data.criticidad === 'media' ? 'selected' : ''}>Media</option>
+                        <option value="alta" ${data.criticidad === 'alta' ? 'selected' : ''}>Alta</option>
+                    </select>
+                </div>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Estado</label>
+                    <select id="editEstado" class="formControl">
+                        <option value="operativo" ${data.estado === 'operativo' ? 'selected' : ''}>Operativo</option>
+                        <option value="averiado" ${data.estado === 'averiado' ? 'selected' : ''}>Averiado</option>
+                        <option value="mantenimiento" ${data.estado === 'mantenimiento' ? 'selected' : ''}>En Mantenimiento</option>
+                    </select>
+                </div>
+                <div class="formGroup">
+                    <label>Valor Reposición (RAV) €</label>
+                    <input type="number" id="editRav" class="formControl" step="0.01" min="0" value="${data.rav || 0}">
+                </div>
+            </div>
+        `;
+        } else if (selectedTipo === 'elemento') {
+            html += `
+            <div class="formRow">
+                <div class="formGroup" style="width: 50%;">
+                    <label>Valor Reposición (RAV) €</label>
+                    <input type="number" id="editRav" class="formControl" step="0.01" min="0" value="${data.rav || 0}">
+                </div>
+            </div>
+        `;
+        }
+
+        html += '</form>';
+
+        const footer = `
+        <button class="btn btnSecondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn btnPrimary" onclick="guardarEdicion()">Guardar</button>
+    `;
+
+        openModal(`Editar ${selectedTipo}`, html, footer);
+    }
+
+    async function guardarEdicion() {
+        const data = {
+            codigo: document.getElementById('editCodigo').value,
+            nombre: document.getElementById('editNombre').value,
+            descripcion: document.getElementById('editDescripcion').value
+        };
+
+        if (selectedTipo === 'maquina') {
+            data.fabricante = document.getElementById('editFabricante').value;
+            data.modelo = document.getElementById('editModelo').value;
+            data.numeroSerie = document.getElementById('editNumeroSerie').value;
+            data.criticidad = document.getElementById('editCriticidad').value;
+            data.estado = document.getElementById('editEstado').value;
+            data.rav = parseFloat(document.getElementById('editRav')?.value) || 0;
+        } else if (selectedTipo === 'elemento') {
+            data.rav = parseFloat(document.getElementById('editRav')?.value) || 0;
+        }
+
+        try {
+            await apiCall(`/api/${selectedTipo}/${selectedId}`, 'PUT', data);
+            closeModal();
+            refreshTree();
+            loadEntityDetails(selectedTipo, selectedId);
+            showToast('Guardado correctamente', 'success');
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    async function eliminarEntidad() {
+        if (!selectedTipo || !selectedId) return;
+
+        if (!confirm(`¿Estás seguro de eliminar este ${selectedTipo} y todos sus elementos hijos?`)) {
+            return;
+        }
+
+        try {
+            await apiCall(`/api/${selectedTipo}/${selectedId}`, 'DELETE');
+            refreshTree();
+            document.getElementById('entidadInfo').innerHTML = '<div class="infoPlaceholder"><i class="fas fa-check"></i><p>Elemento eliminado</p></div>';
+            document.getElementById('detailsActions').style.display = 'none';
+            showToast('Eliminado correctamente', 'success');
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+
+
+    async function cambiarEstadoMaquina(maquinaId) {
+        const html = `
+        <div class="formGroup">
+            <label>Nuevo Estado</label>
+            <select id="nuevoEstado" class="formControl">
+                <option value="operativo">Operativo</option>
+                <option value="averiado">Averiado</option>
+                <option value="mantenimiento">En Mantenimiento</option>
+            </select>
+        </div>
+    `;
+
+        const footer = `
+        <button class="btn btnSecondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn btnPrimary" onclick="confirmarCambioEstado(${maquinaId})">Confirmar</button>
+    `;
+
+        openModal('Cambiar Estado', html, footer);
+    }
+
+    async function confirmarCambioEstado(maquinaId) {
+        const estado = document.getElementById('nuevoEstado').value;
+
+        try {
+            await apiCall(`/api/maquina/${maquinaId}/estado`, 'PUT', { estado });
+            closeModal();
+            refreshTree();
+            loadEntityDetails('maquina', maquinaId);
+            showToast('Estado actualizado', 'success');
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    // =========================================
+    // FUNCIONES AUXILIARES PARA RIGHTBAR
+    // =========================================
+
+    // =========================================
+    // FUNCIONES AUXILIARES PARA RIGHTBAR
+    // =========================================
+
+    function crearOTDesdeRightbar() {
+        if (selectedId && selectedTipo) {
+            // Usar la función compartida mostrarFormularioOT
+            // No, esa función es para el modal. Si queremos crear una nueva OT,
+            // podemos reutilizar el modal en lugar de redirigir
+            mostrarFormularioOT(null, selectedId, 'correctivo', selectedTipo);
+        } else {
+            showToast('Selecciona un activo para crear una OT', 'warning');
+        }
+    }
+
+</script>
+{% endblock %}

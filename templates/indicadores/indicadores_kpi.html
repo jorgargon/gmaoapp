@@ -1,0 +1,552 @@
+{% extends "base.html" %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+    .kpiSection { margin-bottom: 2rem; }
+    .kpiSection h3 {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #888;
+        margin: 0 0 0.75rem 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .kpiGrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+    .kpiCard {
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 10px;
+        padding: 1.25rem 1.25rem 1rem;
+        position: relative;
+        overflow: hidden;
+        transition: box-shadow .2s;
+    }
+    .kpiCard:hover { box-shadow: 0 4px 12px rgba(0,0,0,.1); }
+    .kpiCard.nd { opacity: 0.6; }
+    .kpiCard .kpiCode {
+        font-size: 0.7rem;
+        font-weight: 700;
+        color: #fff;
+        background: #90A4AE;
+        padding: 2px 7px;
+        border-radius: 10px;
+        display: inline-block;
+        margin-bottom: 0.4rem;
+    }
+    .kpiCard .kpiNombre {
+        font-size: 0.78rem;
+        color: #666;
+        margin-bottom: 0.5rem;
+        line-height: 1.3;
+    }
+    .kpiCard .kpiValor {
+        font-size: 1.8rem;
+        font-weight: 800;
+        line-height: 1;
+        color: #1a1a1a;
+    }
+    .kpiCard .kpiUnidad {
+        font-size: 0.8rem;
+        color: #888;
+        margin-left: 3px;
+    }
+    .kpiCard .kpiNd {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #bbb;
+    }
+    .kpiCard .kpiNota {
+        font-size: 0.72rem;
+        color: #aaa;
+        margin-top: 4px;
+        font-style: italic;
+    }
+    /* Barra de estado en el borde izquierdo */
+    .kpiCard::before {
+        content: '';
+        position: absolute;
+        left: 0; top: 0; bottom: 0;
+        width: 4px;
+        border-radius: 10px 0 0 10px;
+        background: #E0E0E0;
+    }
+    .kpiCard.verde::before  { background: #43A047; }
+    .kpiCard.amarillo::before { background: #FB8C00; }
+    .kpiCard.rojo::before   { background: #E53935; }
+    .kpiCard.azul::before   { background: #1E88E5; }
+
+    /* Resumen superior */
+    .resumenGrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    .resumenCard {
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 0.9rem 1rem;
+        text-align: center;
+    }
+    .resumenCard .rVal { font-size: 1.6rem; font-weight: 800; color: #1565C0; }
+    .resumenCard .rLbl { font-size: 0.75rem; color: #666; margin-top: 2px; }
+
+    .filterGroup { display:flex; align-items:center; gap:0.5rem; }
+    .filterGroup label { font-size:0.82rem; color:#555; white-space:nowrap; }
+    .filterGroup input, .filterGroup select { padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:0.85rem; }
+
+    .loadingOverlay {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 4rem;
+        color: #999;
+        font-size: 1rem;
+        gap: 0.75rem;
+    }
+
+    /* Selector jerárquico */
+    .alcanceRow {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        padding: 0.6rem 0.9rem;
+        background: #F5F7FA;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+    .alcanceRow label {
+        font-size: 0.8rem;
+        color: #555;
+        font-weight: 600;
+        white-space: nowrap;
+        margin-right: 0.25rem;
+    }
+    .alcanceStep {
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+    }
+    .alcanceStep select {
+        padding: 4px 8px;
+        font-size: 0.82rem;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        background: #fff;
+        max-width: 200px;
+        cursor: pointer;
+    }
+    .alcanceSep {
+        color: #bbb;
+        font-size: 0.9rem;
+    }
+    .alcanceBreadcrumb {
+        margin-left: auto;
+        font-size: 0.78rem;
+        color: #888;
+        font-style: italic;
+        white-space: nowrap;
+    }
+    .alcanceBreadcrumb strong { color: #1565C0; font-style: normal; }
+    .btnResetAlcance {
+        font-size: 0.75rem;
+        color: #999;
+        background: none;
+        border: 1px solid #e0e0e0;
+        border-radius: 5px;
+        padding: 3px 8px;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .btnResetAlcance:hover { color: #555; border-color: #bbb; }
+</style>
+{% endblock %}
+
+{% block rightMenu %}
+<a href="{{ url_for('indicadores.index') }}" class="btn btnSecondary btnSm" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+    <i class="fas fa-arrow-left"></i> Volver
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="pageHeader">
+    <h2><i class="fas fa-tachometer-alt"></i> Indicadores KPI — EN 15341</h2>
+</div>
+
+<!-- Filtros de período -->
+<div class="filtersBar" style="gap:1rem; align-items:flex-end; margin-bottom:0.75rem;">
+    <div class="filterGroup">
+        <label>Desde</label>
+        <input type="date" id="fInicio" />
+    </div>
+    <div class="filterGroup">
+        <label>Hasta</label>
+        <input type="date" id="fFin" />
+    </div>
+    <button class="btn btnPrimary btnSm" onclick="cargar()">
+        <i class="fas fa-calculator"></i> Calcular KPIs
+    </button>
+</div>
+
+<!-- Selector jerárquico de alcance -->
+<div class="alcanceRow" id="alcanceRow">
+    <label><i class="fas fa-sitemap"></i> Alcance:</label>
+    <div class="alcanceStep" id="stepEmpresa">
+        <select id="selEmpresa" onchange="onSelectNivel('empresa')">
+            <option value="">— Toda la instalación —</option>
+        </select>
+    </div>
+    <span class="alcanceSep" id="sepPlanta" style="display:none;">›</span>
+    <div class="alcanceStep" id="stepPlanta" style="display:none;">
+        <select id="selPlanta" onchange="onSelectNivel('planta')">
+            <option value="">— Todas las plantas —</option>
+        </select>
+    </div>
+    <span class="alcanceSep" id="sepZona" style="display:none;">›</span>
+    <div class="alcanceStep" id="stepZona" style="display:none;">
+        <select id="selZona" onchange="onSelectNivel('zona')">
+            <option value="">— Todas las zonas —</option>
+        </select>
+    </div>
+    <span class="alcanceSep" id="sepLinea" style="display:none;">›</span>
+    <div class="alcanceStep" id="stepLinea" style="display:none;">
+        <select id="selLinea" onchange="onSelectNivel('linea')">
+            <option value="">— Todas las líneas —</option>
+        </select>
+    </div>
+    <span class="alcanceSep" id="sepMaquina" style="display:none;">›</span>
+    <div class="alcanceStep" id="stepMaquina" style="display:none;">
+        <select id="selMaquina" onchange="onSelectNivel('maquina')">
+            <option value="">— Todas las máquinas —</option>
+        </select>
+    </div>
+    <span class="alcanceSep" id="sepElemento" style="display:none;">›</span>
+    <div class="alcanceStep" id="stepElemento" style="display:none;">
+        <select id="selElemento" onchange="onSelectNivel('elemento')">
+            <option value="">— Todos los elementos —</option>
+        </select>
+    </div>
+    <span class="alcanceBreadcrumb" id="alcanceBreadcrumb">Toda la instalación</span>
+    <button class="btnResetAlcance" onclick="resetAlcance()" title="Limpiar selección de alcance">
+        <i class="fas fa-times"></i> Limpiar
+    </button>
+</div>
+
+<!-- Contenido principal (se reemplaza con JS) -->
+<div id="kpiContent">
+    <div class="loadingOverlay" id="placeholder">
+        <i class="fas fa-chart-bar" style="font-size:2rem; color:#e0e0e0;"></i>
+        <span style="color:#ccc;">Selecciona un período y haz clic en "Calcular KPIs"</span>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // ─── Estado del selector jerárquico ────────────────────────────────────────
+    const NIVELES = ['empresa', 'planta', 'zona', 'linea', 'maquina', 'elemento'];
+    const LABELS  = {
+        empresa: 'Empresa', planta: 'Planta', zona: 'Zona/Área',
+        linea: 'Línea', maquina: 'Máquina', elemento: 'Elemento'
+    };
+    const PLACEHOLDERS = {
+        empresa: '— Toda la instalación —', planta: '— Todas las plantas —',
+        zona: '— Todas las zonas —', linea: '— Todas las líneas —',
+        maquina: '— Todas las máquinas —', elemento: '— Todos los elementos —'
+    };
+    // selección actual: {empresa: {id, nombre}, planta: {...}, ...}
+    const _sel = {};
+
+    // Inicializar: mes actual + cargar empresas
+    (function() {
+        const hoy = new Date();
+        const y = hoy.getFullYear(), m = String(hoy.getMonth() + 1).padStart(2, '0');
+        document.getElementById('fInicio').value = `${y}-${m}-01`;
+        document.getElementById('fFin').value = `${y}-${m}-${String(new Date(y, hoy.getMonth()+1, 0).getDate()).padStart(2,'0')}`;
+        // Cargar empresas en el primer dropdown
+        _fetchHijos('root', null, 'selEmpresa', PLACEHOLDERS.empresa);
+    })();
+
+    // Carga hijos de un nodo y rellena un select
+    async function _fetchHijos(nivel, parentId, selectId, placeholder) {
+        const url = `/informes/api/jerarquia?nivel=${nivel}${parentId ? '&parent_id=' + parentId : ''}`;
+        try {
+            const items = await fetch(url).then(r => r.json());
+            const sel = document.getElementById(selectId);
+            sel.innerHTML = `<option value="">${placeholder}</option>`;
+            items.forEach(it => {
+                const opt = document.createElement('option');
+                opt.value = it.id;
+                opt.textContent = it.codigo ? `${it.codigo} — ${it.nombre}` : it.nombre;
+                opt.dataset.nombre = it.nombre;
+                sel.appendChild(opt);
+            });
+            // Si solo hay un elemento y estamos en nivel empresa, no forzar selección
+        } catch(e) {
+            console.warn('Error cargando jerarquía:', e);
+        }
+    }
+
+    // Cuando el usuario cambia un select de nivel
+    async function onSelectNivel(nivel) {
+        const sel = document.getElementById('sel' + nivel.charAt(0).toUpperCase() + nivel.slice(1));
+        const id = sel.value;
+        const nombre = sel.selectedOptions[0]?.dataset?.nombre || sel.selectedOptions[0]?.textContent || '';
+
+        // Actualizar estado
+        if (id) {
+            _sel[nivel] = { id, nombre };
+        } else {
+            delete _sel[nivel];
+        }
+
+        // Limpiar todos los niveles por debajo
+        const idx = NIVELES.indexOf(nivel);
+        for (let i = idx + 1; i < NIVELES.length; i++) {
+            const n = NIVELES[i];
+            delete _sel[n];
+            const childSel = document.getElementById('sel' + n.charAt(0).toUpperCase() + n.slice(1));
+            if (childSel) childSel.innerHTML = `<option value="">${PLACEHOLDERS[n]}</option>`;
+            _setStepVisible(n, false);
+        }
+
+        // Si se seleccionó algo, mostrar el siguiente nivel y cargar sus hijos
+        if (id && idx < NIVELES.length - 1) {
+            const nextNivel = NIVELES[idx + 1];
+            await _fetchHijos(nivel, id, 'sel' + nextNivel.charAt(0).toUpperCase() + nextNivel.slice(1), PLACEHOLDERS[nextNivel]);
+            _setStepVisible(nextNivel, true);
+        }
+
+        _updateBreadcrumb();
+    }
+
+    function _setStepVisible(nivel, visible) {
+        const cap = nivel.charAt(0).toUpperCase() + nivel.slice(1);
+        const step = document.getElementById('step' + cap);
+        const sep  = document.getElementById('sep'  + cap);
+        if (step) step.style.display = visible ? 'flex' : 'none';
+        if (sep)  sep.style.display  = visible ? 'inline' : 'none';
+    }
+
+    function _updateBreadcrumb() {
+        // Encontrar el nivel más profundo seleccionado
+        let parts = ['Toda la instalación'];
+        for (const n of NIVELES) {
+            if (_sel[n]) parts.push(_sel[n].nombre);
+            else break;
+        }
+        const bc = document.getElementById('alcanceBreadcrumb');
+        if (parts.length === 1) {
+            bc.innerHTML = 'Toda la instalación';
+        } else {
+            bc.innerHTML = '<strong>' + parts.slice(1).join(' › ') + '</strong>';
+        }
+    }
+
+    function resetAlcance() {
+        for (const n of NIVELES) {
+            delete _sel[n];
+            const s = document.getElementById('sel' + n.charAt(0).toUpperCase() + n.slice(1));
+            if (s) s.value = '';
+        }
+        // Ocultar todos excepto empresa
+        for (let i = 1; i < NIVELES.length; i++) {
+            _setStepVisible(NIVELES[i], false);
+        }
+        _updateBreadcrumb();
+    }
+
+    // Devuelve {nivel, nivel_id} del nodo más profundo seleccionado
+    function _getAlcanceActual() {
+        let nivel = null, nivel_id = null;
+        for (const n of NIVELES) {
+            if (_sel[n]) { nivel = n; nivel_id = _sel[n].id; }
+            else break;
+        }
+        return { nivel, nivel_id };
+    }
+
+    // ─── Cálculo KPI ───────────────────────────────────────────────────────────
+
+    function cargar() {
+        const fi = document.getElementById('fInicio').value;
+        const ff = document.getElementById('fFin').value;
+        if (!fi || !ff) { showToast('Selecciona el período', 'warning'); return; }
+
+        const { nivel, nivel_id } = _getAlcanceActual();
+        let url = `/informes/api/kpi?fecha_inicio=${fi}&fecha_fin=${ff}`;
+        if (nivel && nivel_id) url += `&nivel=${nivel}&nivel_id=${nivel_id}`;
+
+        document.getElementById('kpiContent').innerHTML = `
+            <div class="loadingOverlay">
+                <i class="fas fa-spinner fa-spin" style="font-size:1.5rem;"></i>
+                Calculando indicadores...
+            </div>`;
+
+        fetch(url)
+            .then(r => r.json())
+            .then(data => renderKPI(data, nivel))
+            .catch(err => {
+                document.getElementById('kpiContent').innerHTML =
+                    `<div class="loadingOverlay" style="color:#e53935;"><i class="fas fa-exclamation-circle"></i> Error: ${esc(err.message)}</div>`;
+            });
+    }
+
+    function renderKPI(data, nivel) {
+        const res = data.resumen || {};
+        const eco = data.economicos || {};
+        const tec = data.tecnicos || {};
+        const org = data.organizativos || {};
+        const periodo = data.periodo || {};
+
+        const fi = new Date(periodo.fecha_inicio).toLocaleDateString('es-ES');
+        const ff = new Date(periodo.fecha_fin).toLocaleDateString('es-ES');
+
+        // Etiqueta de alcance
+        const { nivel: nv, nivel_id } = _getAlcanceActual();
+        let alcanceLabel = 'Toda la instalación';
+        if (nv && _sel[nv]) {
+            const parts = [];
+            for (const n of NIVELES) {
+                if (_sel[n]) parts.push(`${LABELS[n]}: <strong>${esc(_sel[n].nombre)}</strong>`);
+                else break;
+            }
+            alcanceLabel = parts.join(' › ');
+        }
+
+        let html = `
+        <!-- Período y alcance -->
+        <div style="margin-bottom:1rem; font-size:0.85rem; color:#888; display:flex; flex-wrap:wrap; gap:0.5rem; align-items:center;">
+            <span><i class="fas fa-calendar-alt"></i> Período: <strong>${fi} — ${ff}</strong>
+            &nbsp;·&nbsp; ${res.delta_dias || 0} días
+            &nbsp;·&nbsp; 24/7 (${(res.horas_periodo||0).toLocaleString('es-ES')} h)</span>
+            <span style="background:#E3F2FD; color:#1565C0; padding:2px 10px; border-radius:12px; font-size:0.78rem;">
+                <i class="fas fa-sitemap"></i> ${alcanceLabel}
+            </span>
+        </div>
+
+        <!-- Resumen de actividad -->
+        <div class="resumenGrid">
+            ${resBox(res.total_ordenes, 'Total OTs')}
+            ${resBox(res.total_correctivas, 'Correctivas', '#C62828')}
+            ${resBox(res.total_preventivas, 'Preventivas', '#2E7D32')}
+            ${resBox(fmt1(res.horas_total) + ' h', 'Horas imputadas')}
+            ${resBox(fmt1(res.horas_paro) + ' h', 'Horas de paro', '#E65100')}
+            ${resBox(fmtEur(res.coste_total), 'Coste total', '#1565C0')}
+            ${resBox(fmtEur(res.coste_recambios), 'Coste recambios')}
+            ${resBox(fmtEur(res.coste_talleres), 'Coste externos')}
+            ${resBox(fmtEur(res.valor_stock), 'Valor stock actual', '#6A1B9A')}
+        </div>
+
+        <!-- Económicos -->
+        <div class="kpiSection">
+            <h3><i class="fas fa-euro-sign" style="color:#F9A825;"></i> Indicadores Económicos</h3>
+            <div class="kpiGrid">
+                ${kpiCard('E1', eco.E1)}
+                ${kpiCard('E6', eco.E6)}
+                ${kpiCard('E7', eco.E7)}
+                ${kpiCard('E13', eco.E13)}
+                ${kpiCard('E14', eco.E14)}
+            </div>
+        </div>
+
+        <!-- Técnicos -->
+        <div class="kpiSection">
+            <h3><i class="fas fa-wrench" style="color:#1E88E5;"></i> Indicadores Técnicos</h3>
+            <div class="kpiGrid">
+                ${kpiCard('T1', tec.T1)}
+                ${kpiCard('T3', tec.T3)}
+                ${kpiCard('T4', tec.T4)}
+                ${kpiCard('T8', tec.T8)}
+                ${kpiCard('T9', tec.T9)}
+                ${kpiCard('T12', tec.T12)}
+            </div>
+        </div>
+
+        <!-- Organizativos -->
+        <div class="kpiSection">
+            <h3><i class="fas fa-users" style="color:#43A047;"></i> Indicadores Organizativos</h3>
+            <div class="kpiGrid">
+                ${kpiCard('O1', org.O1)}
+                ${kpiCard('O10', org.O10)}
+                ${kpiCard('O12', org.O12)}
+                ${kpiCard('O15', org.O15)}
+                ${kpiCard('O18', org.O18)}
+            </div>
+        </div>
+
+        <!-- Nota -->
+        <div style="font-size:0.78rem; color:#aaa; padding:1rem; border-top:1px solid #f0f0f0; margin-top:1rem;">
+            <i class="fas fa-info-circle"></i>
+            Los indicadores marcados <strong>N/D</strong> requieren datos adicionales no presentes en el modelo actual.
+            Disponibilidad T1 calculada asumiendo operación 24/7; ajusta en equipos con régimen diferente.
+            Coste de mano de obra calculado usando registros de tiempo × coste/hora del técnico
+            (si no hay técnico configurado, se usa el valor de <em>coste_hora_defecto</em> en Configuración General).
+        </div>`;
+
+        document.getElementById('kpiContent').innerHTML = html;
+    }
+
+    function resBox(val, lbl, color) {
+        const c = color || '#1565C0';
+        return `<div class="resumenCard">
+            <div class="rVal" style="color:${c};">${val ?? '-'}</div>
+            <div class="rLbl">${lbl}</div>
+        </div>`;
+    }
+
+    function kpiCard(code, kpi) {
+        if (!kpi) return '';
+        const nd = kpi.nd || kpi.valor === null;
+        const nombre = kpi.nombre || code;
+        const unidad = kpi.unidad || '';
+        const nota = kpi.nota || '';
+
+        let colorClass = 'azul';
+        if (!nd && kpi.valor !== null) {
+            const v = parseFloat(kpi.valor);
+            // Lógica de semáforo por indicador
+            if (code === 'T1') colorClass = v >= 90 ? 'verde' : v >= 70 ? 'amarillo' : 'rojo';
+            else if (code === 'T12') colorClass = v >= 80 ? 'verde' : v >= 50 ? 'amarillo' : 'rojo';
+            else if (code === 'E6') colorClass = v <= 30 ? 'verde' : v <= 60 ? 'amarillo' : 'rojo';
+            else if (code === 'E7') colorClass = v >= 60 ? 'verde' : v >= 30 ? 'amarillo' : 'rojo';
+            else if (code === 'T9') colorClass = v <= 30 ? 'verde' : v <= 60 ? 'amarillo' : 'rojo';
+            else if (code === 'T8') colorClass = v >= 50 ? 'verde' : v >= 30 ? 'amarillo' : 'rojo';
+            else if (code === 'O18') colorClass = v >= 80 ? 'verde' : v >= 50 ? 'amarillo' : 'rojo';
+            else if (code === 'O15') colorClass = v >= 60 ? 'verde' : v >= 30 ? 'amarillo' : 'rojo';
+            else if (code === 'O10') colorClass = v >= 70 ? 'verde' : v >= 40 ? 'amarillo' : 'rojo';
+            else colorClass = 'azul';
+        }
+
+        // Color del badge de código por categoría
+        const badgeColor = code.startsWith('E') ? '#F9A825' :
+                           code.startsWith('T') ? '#1E88E5' : '#43A047';
+
+        const valorHtml = nd
+            ? `<div class="kpiNd">N/D</div>${nota ? `<div class="kpiNota">${esc(nota)}</div>` : ''}`
+            : `<div class="kpiValor">${fmt2(kpi.valor)}<span class="kpiUnidad">${esc(unidad)}</span></div>`;
+
+        return `
+        <div class="kpiCard ${nd ? 'nd' : colorClass}">
+            <span class="kpiCode" style="background:${badgeColor};">${esc(code)}</span>
+            <div class="kpiNombre">${esc(nombre)}</div>
+            ${valorHtml}
+        </div>`;
+    }
+
+    function esc(s) { return s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function fmt1(v) { return v == null ? '0' : parseFloat(v).toLocaleString('es-ES', {maximumFractionDigits:1}); }
+    function fmt2(v) { return v == null ? 'N/D' : parseFloat(v).toLocaleString('es-ES', {maximumFractionDigits:2}); }
+    function fmtEur(v) { return v == null ? '0 €' : parseFloat(v).toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €'; }
+</script>
+{% endblock %}

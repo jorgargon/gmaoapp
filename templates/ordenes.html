@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
+<script src="{{ url_for('static', filename='js/ordenes-common.js') }}"></script>
+<style>
+.equipo-ruta-cell {
+    max-width: 220px;
+    font-size: 0.78em;
+    line-height: 1.6;
+    white-space: normal;
+}
+.equipo-ruta-path {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px;
+}
+.equipo-ruta-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    font-size: 0.85em;
+    font-weight: 500;
+    white-space: nowrap;
+}
+.equipo-ruta-item.tipo-planta  { background: #e8f5e9; color: #2e7d32; }
+.equipo-ruta-item.tipo-zona    { background: #e3f2fd; color: #1565c0; }
+.equipo-ruta-item.tipo-linea   { background: #fff3e0; color: #e65100; }
+.equipo-ruta-item.tipo-maquina { background: #f3e5f5; color: #6a1b9a; }
+.equipo-ruta-item.tipo-elemento{ background: #fce4ec; color: #880e4f; }
+.equipo-ruta-sep {
+    color: #bbb;
+    font-size: 0.9em;
+    line-height: 1;
+}
+</style>
+{% endblock %}
+
+{% block rightMenu %}
+<button class="rightbarAction primary" onclick="mostrarFormularioOT()" title="Crear nueva orden de trabajo">
+    <span class="actionCircle"><i class="fas fa-plus"></i></span>
+    <span class="actionLabel">Nueva OT</span>
+</button>
+<div class="rightbarDivider"></div>
+<button class="rightbarAction" onclick="cargarOrdenes()" title="Recargar órdenes">
+    <span class="actionCircle"><i class="fas fa-sync-alt"></i></span>
+    <span class="actionLabel">Recargar</span>
+</button>
+<div class="rightbarDivider"></div>
+<button class="rightbarAction success" onclick="filtrarPorEstado('en_curso')" title="Filtrar en curso">
+    <span class="actionCircle"><i class="fas fa-play-circle"></i></span>
+    <span class="actionLabel">En Curso</span>
+</button>
+<button class="rightbarAction warning" onclick="filtrarPorEstado('pendiente')" title="Filtrar pendientes">
+    <span class="actionCircle"><i class="fas fa-exclamation-circle"></i></span>
+    <span class="actionLabel">Pendientes</span>
+</button>
+{% endblock %}
+
+{% block content %}
+
+<div class="pageHeader">
+    <h2><i class="fas fa-wrench"></i> Órdenes de Trabajo</h2>
+</div>
+
+<!-- Filtros -->
+<div class="filtersBar">
+    <div class="filterGroup">
+        <select id="filtroEstado" class="formControl" onchange="filtrarOrdenes()">
+            <option value="">Todos los estados</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="asignada">Asignada</option>
+            <option value="en_curso">En Curso</option>
+            <option value="cerrada">Cerrada</option>
+            <option value="cancelada">Cancelada</option>
+        </select>
+    </div>
+    <div class="filterGroup">
+        <select id="filtroTipo" class="formControl" onchange="filtrarOrdenes()">
+            <option value="">Todos los tipos</option>
+            <option value="correctivo">Correctivo</option>
+            <option value="preventivo">Preventivo</option>
+        </select>
+    </div>
+    <div class="filterGroup">
+        <select id="filtroPrioridad" class="formControl" onchange="filtrarOrdenes()">
+            <option value="">Todas las prioridades</option>
+            <option value="urgente">Urgente</option>
+            <option value="alta">Alta</option>
+            <option value="media">Media</option>
+            <option value="baja">Baja</option>
+        </select>
+    </div>
+    <div class="filterGroup">
+        <label class="checkboxLabel">
+            <input type="checkbox" id="mostrarCerradas" onchange="cargarOrdenes()">
+            <span>Mostrar cerradas</span>
+        </label>
+    </div>
+
+    <!-- Estadísticas integradas -->
+    <div class="statsContainer" style="margin-left: auto; display: flex; gap: 10px;">
+        <span class="tag tag-warning" title="Órdenes Pendientes/Asignadas">
+            <i class="fas fa-exclamation-circle"></i> Pendientes: <strong id="statPendientes">0</strong>
+        </span>
+        <span class="tag tag-info" title="Órdenes En Curso">
+            <i class="fas fa-play-circle"></i> En Curso: <strong id="statEnCurso">0</strong>
+        </span>
+    </div>
+</div>
+
+<!-- Vista única de tabla -->
+<div id="tableView" class="tableContainer">
+    <table class="dataTable">
+        <thead>
+            <tr>
+                <th>Número</th>
+                <th>Tipo</th>
+                <th>Prioridad</th>
+                <th>Fecha Apertura</th>
+                <th>Equipo</th>
+                <th>Ubicación</th>
+                <th>Avería</th>
+                <th>Estado</th>
+            </tr>
+        </thead>
+        <tbody id="ordenesTableBody"></tbody>
+    </table>
+</div>
+
+<script>
+    let ordenesData = [];
+    let currentView = 'cards';
+
+    document.addEventListener('DOMContentLoaded', async function () {
+        // Inicializar callback de refresco
+        setRefreshCallback(cargarOrdenes);
+
+        // Cargar tipos de intervención para filtros
+        await cargarTiposIntervencionOT();
+        cargarOrdenes();
+
+        const params = new URLSearchParams(window.location.search);
+
+        // Abrir una orden directamente si viene ?ot=<id>
+        if (params.get('ot')) {
+            const otId = parseInt(params.get('ot'));
+            if (otId) {
+                // Esperar a que la lista cargue y luego abrir el detalle
+                setTimeout(() => verOrden(otId), 300);
+            }
+        }
+
+        // Verificar si venimos con parámetros para nueva OT
+        if (params.get('nuevaOT') === 'true') {
+            const equipoId = params.get('equipoId') || params.get('maquinaId');
+            const equipoTipo = params.get('equipoTipo') || 'maquina';
+            const tipo = params.get('tipo') || 'correctivo';
+            mostrarFormularioOT(null, equipoId, tipo, equipoTipo);
+        }
+
+    });
+
+    async function cargarTiposIntervencionOT() {
+        try {
+            window.tiposCache = await apiCall('/api/tipos-intervencion');
+            // Actualizar el select de filtro
+            const filtroTipo = document.getElementById('filtroTipo');
+            let options = '<option value="">Todos los tipos</option>';
+            window.tiposCache.forEach(t => {
+                options += `<option value="${t.codigo}">${t.nombre}</option>`;
+            });
+            filtroTipo.innerHTML = options;
+        } catch (error) {
+            // Si falla, usar tipos por defecto
+            window.tiposCache = [
+                { codigo: 'correctivo', nombre: 'Correctivo', icono: 'fa-wrench', color: '#e53935' },
+                { codigo: 'preventivo', nombre: 'Preventivo', icono: 'fa-calendar-check', color: '#43a047' }
+            ];
+        }
+    }
+
+    async function cargarOrdenes() {
+        try {
+            const estado = document.getElementById('filtroEstado').value;
+            const tipo = document.getElementById('filtroTipo').value;
+            const incluirCerradas = document.getElementById('mostrarCerradas').checked;
+
+            let url = '/api/ordenes?';
+            if (estado) url += `estado=${estado}&`;
+            if (tipo) url += `tipo=${tipo}&`;
+            if (incluirCerradas) url += `incluirCerradas=true&`;
+
+            ordenesData = await apiCall(url);
+            renderOrdenes();
+            updateStats();
+        } catch (error) {
+            showToast('Error al cargar órdenes', 'error');
+        }
+    }
+
+
+    function filtrarOrdenes() {
+        cargarOrdenes();
+    }
+
+    function renderRutaEquipo(items) {
+        if (!items || items.length === 0) return '';
+        const parts = items.map(item =>
+            `<span class="equipo-ruta-item tipo-${item.tipo}">${item.nombre}</span>`
+        );
+        return `<div class="equipo-ruta-path">${parts.join('<span class="equipo-ruta-sep">›</span>')}</div>`;
+    }
+
+    function renderOrdenes() {
+        // Filtrar por prioridad en cliente
+        let filtered = ordenesData;
+        const prioridadFiltro = document.getElementById('filtroPrioridad').value;
+        if (prioridadFiltro) {
+            filtered = filtered.filter(o => o.prioridad === prioridadFiltro);
+        }
+
+        // Renderizar tabla
+        const tableBody = document.getElementById('ordenesTableBody');
+        document.getElementById('tableView').style.display = 'block'; // Asegurar visible
+
+        // Ordenar por TipoIntervencion.orden (ya viene del backend) y luego fecha?
+        // El backend ya ordena correctamente. Mantener orden del backend o aplicar ordenación cliente si es necesario.
+        // El backend ordena: Tipo.orden, Prioridad custom, (falta fecha).
+        // Si quiero mantener el orden del backend, no debería hacer sort aquí a menos que el backend no lo haga todo.
+        // El backend hace: Tipo.orden, Prioridad.
+        // Aquí dice: "Ordenar por prioridad (urgente > alta > media > baja) y luego por fecha".
+        // Mejor respetamos el orden del backend que ya incluye la lógica de Tipo + Prioridad.
+        // Solo si queremos añadir fecha como 3er criterio.
+
+        // Vamos a confiar en el backend para la ordenación principal.
+
+        if (filtered.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="9" class="emptyRow">No hay órdenes de trabajo</td></tr>';
+        } else {
+            let rowsHtml = '';
+            filtered.forEach(o => {
+                const tipoInfo = getTipoInfo(o.tipo);
+                const rutaHtml = renderRutaEquipo(o.equipoRutaItems);
+                rowsHtml += `
+                <tr class="row-${o.estado}" onclick="verOrden(${o.id})" style="cursor: pointer;">
+                    <td style="white-space: nowrap;"><span class="codigoTag">${o.numero}</span></td>
+                    <td style="white-space: nowrap; text-align: center;"><span class="tipoIcono custom-tooltip" style="color: ${tipoInfo.color}; font-size: 1.2em;" data-tooltip="${tipoInfo.nombre}"><i class="fas ${tipoInfo.icono}"></i></span></td>
+                    <td style="white-space: nowrap;"><span class="tag tag-${o.prioridad}">${o.prioridad}</span></td>
+                    <td style="white-space: nowrap;">${o.fechaCreacion ? new Date(o.fechaCreacion).toLocaleString('es-ES') : ''}</td>
+                    <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 160px;" title="${o.equipoNombre || o.maquinaNombre || '-'}">${o.equipoNombre || o.maquinaNombre || '-'}</td>
+                    <td class="equipo-ruta-cell">${rutaHtml || '<span style="color:#aaa">—</span>'}</td>
+                    <td style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px;" title="${o.titulo}">${o.titulo}</td>
+                    <td style="white-space: nowrap;"><span class="estado-${o.estado}">${formatEstado(o.estado)}</span></td>
+                </tr>
+            `;
+            });
+            tableBody.innerHTML = rowsHtml;
+        }
+    }
+
+
+
+    function updateStats() {
+        // Actualizar contadores en la barra de filtros
+        document.getElementById('statPendientes').textContent = ordenesData.filter(o => o.estado === 'pendiente' || o.estado === 'asignada').length;
+        document.getElementById('statEnCurso').textContent = ordenesData.filter(o => o.estado === 'en_curso').length;
+    }
+
+
+
+    // =========================================
+    // FUNCIONES AUXILIARES PARA RIGHTBAR
+    // =========================================
+
+    function filtrarPorEstado(estado) {
+        document.getElementById('filtroEstado').value = estado;
+        filtrarOrdenes();
+    }
+
+    function exportarOrdenes() {
+        // Placeholder - implementar exportación a Excel
+        showToast('Función de exportación en desarrollo', 'info');
+    }
+
+
+</script>
+{% endblock %}

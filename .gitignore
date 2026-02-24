@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Virtual environment
+venv/
+env/
+.env
+.venv
+
+# Flask / SQLite
+instance/
+*.db
+*.db-journal
+*.db.bak
+
+# Claude Code local settings
+.claude/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Secrets
+*.env
+config.py
+secret_key.txt

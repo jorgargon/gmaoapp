@@ -1,0 +1,290 @@
+{% extends "mobile/base.html" %}
+{% block title %}Nueva OT – GMAO{% endblock %}
+
+{% block header %}
+  <a href="{{ url_for('mobile.home') }}" class="m-header-back">
+    <i class="fas fa-arrow-left"></i>
+  </a>
+  <span class="m-header-title">Nueva Orden de Trabajo</span>
+{% endblock %}
+
+{% block content %}
+
+<div class="m-section">
+  <div class="m-section-header">
+    <div class="m-section-header-left">
+      <i class="fas fa-wrench"></i>Datos de la OT
+    </div>
+    <i class="fas fa-chevron-down m-section-chevron"></i>
+  </div>
+  <div class="m-section-body">
+    <div class="m-form">
+
+      <div class="m-field">
+        <label class="m-label">Tipo *</label>
+        <select class="m-select" id="tipo" required>
+          <optgroup label="Mantenimiento">
+            <option value="correctivo">Correctivo</option>
+            <option value="preventivo">Preventivo</option>
+          </optgroup>
+          <optgroup label="Otras órdenes">
+            <option value="mejora">Mejora</option>
+            <option value="proyecto">Proyecto</option>
+            <option value="otro">Otro</option>
+          </optgroup>
+        </select>
+      </div>
+
+      <div class="m-field">
+        <label class="m-label">Prioridad *</label>
+        <select class="m-select" id="prioridad" required>
+          <option value="media" selected>Media</option>
+          <option value="baja">Baja</option>
+          <option value="alta">Alta</option>
+          <option value="urgente">Urgente</option>
+        </select>
+      </div>
+
+      <div class="m-field">
+        <label class="m-label">Título *</label>
+        <input type="text" class="m-input" id="titulo" required maxlength="200"
+          placeholder="Describe brevemente el trabajo…">
+      </div>
+
+      <div class="m-field">
+        <label class="m-label">Descripción del problema</label>
+        <textarea class="m-textarea" id="descripcionProblema" rows="3"
+          placeholder="Síntomas, fallos observados…"></textarea>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+{# Selector de equipo en cascada #}
+<div class="m-section">
+  <div class="m-section-header">
+    <div class="m-section-header-left">
+      <i class="fas fa-industry"></i>Equipo afectado
+    </div>
+    <i class="fas fa-chevron-down m-section-chevron"></i>
+  </div>
+  <div class="m-section-body">
+    <div class="m-form">
+
+      <div class="m-field">
+        <label class="m-label">Planta</label>
+        <select class="m-select" id="plantaId" onchange="onCascadeChange('planta')">
+          <option value="">— Selecciona planta —</option>
+          {% for p in plantas %}
+          <option value="{{ p.id }}">{{ p.nombre }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="m-field cascade-field" id="zonaField" style="display:none">
+        <label class="m-label">Zona</label>
+        <select class="m-select" id="zonaId" onchange="onCascadeChange('zona')">
+          <option value="">— Selecciona zona —</option>
+        </select>
+      </div>
+
+      <div class="m-field cascade-field" id="lineaField" style="display:none">
+        <label class="m-label">Línea</label>
+        <select class="m-select" id="lineaId" onchange="onCascadeChange('linea')">
+          <option value="">— Selecciona línea —</option>
+        </select>
+      </div>
+
+      <div class="m-field cascade-field" id="maquinaField" style="display:none">
+        <label class="m-label">Máquina</label>
+        <select class="m-select" id="maquinaId" onchange="onCascadeChange('maquina')">
+          <option value="">— Selecciona máquina —</option>
+        </select>
+      </div>
+
+      <div class="m-field cascade-field" id="elementoField" style="display:none">
+        <label class="m-label">Elemento (opcional)</label>
+        <select class="m-select" id="elementoId" onchange="onCascadeChange('elemento')">
+          <option value="">— Sin elemento específico —</option>
+        </select>
+      </div>
+
+      <div id="equipoResumen" style="display:none;padding:10px;background:var(--m-primary-light);border-radius:8px;font-size:.84rem;font-weight:600;color:var(--m-primary)">
+        <i class="fas fa-check-circle"></i> <span id="equipoResumenTexto"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# Técnico y fecha #}
+<div class="m-section">
+  <div class="m-section-header">
+    <div class="m-section-header-left">
+      <i class="fas fa-user-cog"></i>Asignación
+    </div>
+    <i class="fas fa-chevron-down m-section-chevron"></i>
+  </div>
+  <div class="m-section-body">
+    <div class="m-form">
+
+      <div class="m-field">
+        <label class="m-label">Técnico asignado</label>
+        <select class="m-select" id="tecnicoAsignado">
+          <option value="">— Sin asignar —</option>
+          {% for t in tecnicos %}
+          {% set nombre_completo = t.nombre + (' ' + t.apellidos if t.apellidos else '') %}
+          <option value="{{ nombre_completo }}"
+            {% if nombre_completo.strip() == nombre_tecnico %}selected{% endif %}>
+            {{ nombre_completo }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="m-field">
+        <label class="m-label">Fecha programada (opcional)</label>
+        <input type="date" class="m-input" id="fechaProgramada">
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div style="padding-bottom:8px">
+  <button class="m-btn m-btn-primary m-btn-full" onclick="crearOT()" id="btnCrear">
+    <i class="fas fa-plus-circle"></i> Crear orden de trabajo
+  </button>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+const NOMBRE_TECNICO = "{{ nombre_tecnico | e }}";
+
+// Estado del equipo seleccionado (se va sobreescribiendo al bajar en la jerarquía)
+let equipo = { tipo: null, id: null };
+
+// Mapa de jerarquía: qué sigue a cada nivel
+const NEXT_LEVEL = {
+  planta:  { nivel: 'zona',     campo: 'plantaId',  field: 'zonaField',    selectId: 'zonaId' },
+  zona:    { nivel: 'linea',    campo: 'zonaId',     field: 'lineaField',   selectId: 'lineaId' },
+  linea:   { nivel: 'maquina',  campo: 'lineaId',    field: 'maquinaField', selectId: 'maquinaId' },
+  maquina: { nivel: 'elemento', campo: 'maquinaId',  field: 'elementoField',selectId: 'elementoId' },
+};
+
+const LABELS = { planta: 'Planta', zona: 'Zona', linea: 'Línea', maquina: 'Máquina', elemento: 'Elemento' };
+
+function onCascadeChange(nivel) {
+  const selectId = nivel + 'Id';
+  const val = parseInt(document.getElementById(selectId).value);
+
+  // Ocultar todos los niveles inferiores
+  const levels = ['zona', 'linea', 'maquina', 'elemento'];
+  let hide = false;
+  levels.forEach(l => {
+    if (l === nivel) { hide = true; return; }
+    if (hide) {
+      document.getElementById(l + 'Field').style.display = 'none';
+      document.getElementById(l + 'Id').innerHTML = `<option value="">— Selecciona —</option>`;
+    }
+  });
+
+  if (!val) {
+    // Subir equipo al nivel padre
+    const parentLevels = { zona: 'planta', linea: 'zona', maquina: 'linea', elemento: 'maquina' };
+    const parentNivel = parentLevels[nivel];
+    if (parentNivel) {
+      const pId = parseInt(document.getElementById(parentNivel + 'Id').value);
+      if (pId) setEquipo(parentNivel, pId);
+      else setEquipo(null, null);
+    } else {
+      setEquipo(null, null);
+    }
+    return;
+  }
+
+  setEquipo(nivel, val);
+
+  // Cargar siguiente nivel
+  const next = NEXT_LEVEL[nivel];
+  if (next) {
+    fetch(`/movil/api/equipos?nivel=${next.nivel}&parent_id=${val}`)
+      .then(r => r.json())
+      .then(items => {
+        if (!items.length) return;
+        const sel = document.getElementById(next.selectId);
+        sel.innerHTML = `<option value="">— Selecciona ${LABELS[next.nivel] || next.nivel} —</option>`;
+        items.forEach(i => {
+          const opt = document.createElement('option');
+          opt.value = i.id;
+          opt.textContent = i.nombre + (i.codigo ? ` (${i.codigo})` : '');
+          sel.appendChild(opt);
+        });
+        document.getElementById(next.field).style.display = 'block';
+      });
+  }
+}
+
+function setEquipo(tipo, id) {
+  equipo = { tipo, id };
+  if (!tipo) {
+    document.getElementById('equipoResumen').style.display = 'none';
+    return;
+  }
+  const sel = document.getElementById(tipo + 'Id');
+  const nombre = sel ? (sel.options[sel.selectedIndex]?.text || '') : '';
+  document.getElementById('equipoResumenTexto').textContent = `${LABELS[tipo]}: ${nombre}`;
+  document.getElementById('equipoResumen').style.display = 'block';
+}
+
+// ---- Crear OT ----
+function crearOT() {
+  const titulo = document.getElementById('titulo').value.trim();
+  if (!titulo) { mToast('El título es obligatorio', 'error'); return; }
+
+  const body = {
+    tipo:                document.getElementById('tipo').value,
+    prioridad:           document.getElementById('prioridad').value,
+    titulo,
+    descripcionProblema: document.getElementById('descripcionProblema').value.trim(),
+    tecnicoAsignado:     document.getElementById('tecnicoAsignado').value,
+    creadoPor:           NOMBRE_TECNICO || 'Sistema',
+  };
+
+  if (equipo.tipo && equipo.id) {
+    body.equipoTipo = equipo.tipo;
+    body.equipoId   = equipo.id;
+    if (equipo.tipo === 'maquina') body.maquinaId = equipo.id;
+  }
+
+  const fecha = document.getElementById('fechaProgramada').value;
+  if (fecha) body.fechaProgramada = fecha;
+
+  const btn = document.getElementById('btnCrear');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="m-spinner"></span> Creando…';
+
+  fetch('/api/orden', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+    .then(async r => {
+      const data = await r.json();
+      if (!r.ok) throw data.error || 'Error al crear la orden';
+      return data;
+    })
+    .then(data => {
+      mToast(`OT ${data.numero} creada`, 'success');
+      setTimeout(() => { window.location.href = `/movil/ot/${data.id}`; }, 800);
+    })
+    .catch(e => {
+      mToast(typeof e === 'string' ? e : 'Error al crear la orden', 'error');
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-plus-circle"></i> Crear orden de trabajo';
+    });
+}
+</script>
+{% endblock %}

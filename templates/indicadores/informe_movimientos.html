@@ -1,0 +1,218 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+    .badgeMov { display:inline-block; padding:2px 10px; border-radius:12px; font-size:0.75rem; font-weight:700; }
+    .mov-ENTRADA { background:#E8F5E9; color:#1B5E20; }
+    .mov-SALIDA  { background:#FFEBEE; color:#B71C1C; }
+    .mov-AJUSTE  { background:#FFF3E0; color:#E65100; }
+    .rowEntrada { background:#F9FBE7 !important; }
+    .rowSalida  { background:#FFF5F5 !important; }
+    .infoPanel { display:flex; gap:1.5rem; flex-wrap:wrap; margin-bottom:1rem; }
+    .infoBox { background:#fff; border:1px solid #e0e0e0; border-radius:8px; padding:0.75rem 1.25rem; min-width:130px; text-align:center; }
+    .infoBox .val { font-size:1.4rem; font-weight:700; }
+    .infoBox .lbl { font-size:0.75rem; color:#666; margin-top:2px; }
+    .filterGroup { display:flex; align-items:center; gap:0.5rem; }
+    .filterGroup label { font-size:0.82rem; color:#555; white-space:nowrap; }
+    .filterGroup input, .filterGroup select { padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:0.85rem; }
+</style>
+{% endblock %}
+
+{% block rightMenu %}
+<button class="btn btnPrimary btnSm" onclick="exportarExcel()" title="Exportar a Excel">
+    <i class="fas fa-file-excel"></i> Excel
+</button>
+<a href="{{ url_for('indicadores.index') }}" class="btn btnSecondary btnSm" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+    <i class="fas fa-arrow-left"></i> Volver
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="pageHeader">
+    <h2><i class="fas fa-exchange-alt"></i> Informe de Movimientos de Stock</h2>
+</div>
+
+<!-- Filtros -->
+<div class="filtersBar" style="gap:1rem; align-items:flex-end;">
+    <div class="filterGroup">
+        <label>Desde</label>
+        <input type="date" id="fInicio" />
+    </div>
+    <div class="filterGroup">
+        <label>Hasta</label>
+        <input type="date" id="fFin" />
+    </div>
+    <div class="filterGroup">
+        <label>Tipo</label>
+        <select id="fTipo">
+            <option value="">Todos</option>
+            <option value="entrada">Entradas</option>
+            <option value="salida">Salidas</option>
+            <option value="ajuste">Ajustes</option>
+        </select>
+    </div>
+    <button class="btn btnPrimary btnSm" onclick="cargar()"><i class="fas fa-search"></i> Consultar</button>
+</div>
+
+<!-- Panel de resumen -->
+<div class="infoPanel" id="infoPanel" style="display:none;">
+    <div class="infoBox">
+        <div class="val" id="sumEntUds" style="color:#2E7D32;">-</div>
+        <div class="lbl">Uds. entradas</div>
+    </div>
+    <div class="infoBox">
+        <div class="val" id="sumSalUds" style="color:#C62828;">-</div>
+        <div class="lbl">Uds. salidas</div>
+    </div>
+    <div class="infoBox">
+        <div class="val" id="sumEntCost" style="color:#2E7D32;">-</div>
+        <div class="lbl">Coste entradas</div>
+    </div>
+    <div class="infoBox">
+        <div class="val" id="sumSalCost" style="color:#C62828;">-</div>
+        <div class="lbl">Coste salidas</div>
+    </div>
+    <div class="infoBox">
+        <div class="val" id="sumMovs" style="color:#555;">-</div>
+        <div class="lbl">Total movimientos</div>
+    </div>
+</div>
+
+<!-- Buscador -->
+<div style="display:flex; align-items:center; gap:0.5rem; margin-bottom:0.5rem;">
+    <i class="fas fa-search" style="color:#999;"></i>
+    <input type="text" id="buscar" placeholder="Buscar en resultados..." style="padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:0.85rem; width:260px;" oninput="filtrarTabla()">
+    <span id="contadorFilas" style="font-size:0.8rem; color:#888;"></span>
+</div>
+
+<!-- Tabla -->
+<div class="tableContainer" style="overflow-x:auto;">
+    <table class="dataTable small" id="tablaMov">
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Tipo</th>
+                <th>Subtipo</th>
+                <th>Código</th>
+                <th>Recambio</th>
+                <th style="text-align:right;">Cantidad</th>
+                <th style="text-align:right;">P. Unit. €</th>
+                <th style="text-align:right;">Total €</th>
+                <th>OT / Albarán</th>
+                <th>Usuario</th>
+                <th>Motivo</th>
+                <th style="text-align:right;">Stock Post.</th>
+            </tr>
+        </thead>
+        <tbody id="tablaBody"></tbody>
+    </table>
+    <div id="noData" style="display:none; text-align:center; padding:3rem; color:#999;">
+        <i class="fas fa-inbox" style="font-size:2rem; margin-bottom:0.5rem; display:block;"></i>
+        No hay movimientos para los filtros seleccionados.
+    </div>
+    <div id="loadingMsg" style="display:none; text-align:center; padding:3rem; color:#999;">
+        <i class="fas fa-spinner fa-spin" style="font-size:1.5rem;"></i> Cargando...
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let _allRows = [];
+
+    // Inicializar fechas: mes actual
+    (function() {
+        const hoy = new Date();
+        const y = hoy.getFullYear(), m = String(hoy.getMonth() + 1).padStart(2, '0');
+        document.getElementById('fInicio').value = `${y}-${m}-01`;
+        document.getElementById('fFin').value = `${y}-${m}-${String(new Date(y, hoy.getMonth()+1, 0).getDate()).padStart(2,'0')}`;
+    })();
+
+    function cargar() {
+        const params = new URLSearchParams({
+            fecha_inicio: document.getElementById('fInicio').value,
+            fecha_fin:    document.getElementById('fFin').value,
+            tipo:         document.getElementById('fTipo').value,
+        });
+
+        document.getElementById('loadingMsg').style.display = 'block';
+        document.getElementById('noData').style.display = 'none';
+        document.getElementById('tablaBody').innerHTML = '';
+        document.getElementById('infoPanel').style.display = 'none';
+
+        fetch(`/informes/api/movimientos?${params}`)
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('loadingMsg').style.display = 'none';
+                _allRows = data.rows || [];
+                renderizarTabla(_allRows);
+                const t = data.totales || {};
+                document.getElementById('sumEntUds').textContent = (t.entradas_uds || 0).toLocaleString('es-ES');
+                document.getElementById('sumSalUds').textContent = (t.salidas_uds || 0).toLocaleString('es-ES');
+                document.getElementById('sumEntCost').textContent = fmtEur(t.coste_entradas || 0);
+                document.getElementById('sumSalCost').textContent = fmtEur(t.coste_salidas || 0);
+                document.getElementById('sumMovs').textContent = _allRows.length;
+                document.getElementById('infoPanel').style.display = 'flex';
+            })
+            .catch(err => {
+                document.getElementById('loadingMsg').style.display = 'none';
+                showToast('Error al cargar datos: ' + err.message, 'error');
+            });
+    }
+
+    function renderizarTabla(rows) {
+        const tbody = document.getElementById('tablaBody');
+        const noData = document.getElementById('noData');
+
+        if (!rows.length) {
+            tbody.innerHTML = '';
+            noData.style.display = 'block';
+            document.getElementById('contadorFilas').textContent = '0 resultados';
+            return;
+        }
+        noData.style.display = 'none';
+        document.getElementById('contadorFilas').textContent = `${rows.length} movimientos`;
+
+        tbody.innerHTML = rows.map(r => {
+            const rowCls = r.tipo === 'ENTRADA' ? 'rowEntrada' : (r.tipo === 'SALIDA' ? 'rowSalida' : '');
+            const refCol = r.orden_trabajo ? `<span style="font-size:0.8rem; color:#1565C0;">${esc(r.orden_trabajo)}</span>` :
+                           r.albaran ? `<span style="font-size:0.8rem;">${esc(r.albaran)}</span>` : '-';
+            return `
+                <tr class="${rowCls}">
+                    <td style="white-space:nowrap;">${esc(r.fecha)}</td>
+                    <td><span class="badgeMov mov-${esc(r.tipo)}">${esc(r.tipo)}</span></td>
+                    <td style="font-size:0.8rem; color:#666;">${esc(r.subtipo)}</td>
+                    <td style="font-weight:600; color:#1565C0; font-size:0.82rem;">${esc(r.recambio_codigo)}</td>
+                    <td style="font-size:0.85rem;">${esc(r.recambio_nombre)}</td>
+                    <td style="text-align:right; font-weight:600;">${r.cantidad >= 0 ? '+' : ''}${r.cantidad}</td>
+                    <td style="text-align:right;">${fmtEur(r.precio_unitario)}</td>
+                    <td style="text-align:right; font-weight:600;">${fmtEur(r.coste_total)}</td>
+                    <td>${refCol}</td>
+                    <td style="font-size:0.82rem;">${esc(r.usuario)}</td>
+                    <td style="font-size:0.78rem; color:#666; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(r.motivo)}">${esc(r.motivo)}</td>
+                    <td style="text-align:right;">${r.stock_posterior !== '' ? r.stock_posterior : '-'}</td>
+                </tr>
+            `;
+        }).join('');
+    }
+
+    function filtrarTabla() {
+        const q = document.getElementById('buscar').value.trim().toLowerCase();
+        if (!q) { renderizarTabla(_allRows); return; }
+        const filtered = _allRows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
+        renderizarTabla(filtered);
+    }
+
+    function exportarExcel() {
+        const params = new URLSearchParams({
+            fecha_inicio: document.getElementById('fInicio').value,
+            fecha_fin:    document.getElementById('fFin').value,
+            tipo:         document.getElementById('fTipo').value,
+        });
+        window.location.href = `/informes/api/movimientos/excel?${params}`;
+    }
+
+    function esc(s) { return s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function fmtEur(v) { return v == null ? '-' : parseFloat(v).toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €'; }
+</script>
+{% endblock %}

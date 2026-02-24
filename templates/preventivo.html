@@ -1,0 +1,243 @@
+{% extends "base.html" %}
+
+{% block head %}
+<script src="{{ url_for('static', filename='js/ordenes-common.js') }}"></script>
+{% endblock %}
+
+{% block rightMenu %}
+<button class="rightbarAction primary" onclick="nuevaOTPreventiva()" title="Nueva OT Preventiva">
+    <span class="actionCircle"><i class="fas fa-plus"></i></span>
+    <span class="actionLabel">Nueva OT</span>
+</button>
+<div class="rightbarDivider"></div>
+<button class="rightbarAction" onclick="cargarPreventivos()" title="Recargar">
+    <span class="actionCircle"><i class="fas fa-sync-alt"></i></span>
+    <span class="actionLabel">Recargar</span>
+</button>
+{% endblock %}
+
+{% block title %}Preventivo{% endblock %}
+{% block content %}
+<div class="pageHeader">
+    <h2><i class="fas fa-shield-alt"></i> Mantenimiento Preventivo</h2>
+</div>
+
+<!-- Estadísticas rápidas -->
+<div class="filtersBar">
+    <div class="statsContainer" style="display:flex;gap:10px;flex-wrap:wrap;">
+        <span class="tag tag-warning" title="Vencidas">
+            <i class="fas fa-exclamation-circle"></i> Vencidas: <strong id="statVencidas">0</strong>
+        </span>
+        <span class="tag tag-media" title="Esta semana" style="background:#e3f2fd;color:#1565c0;">
+            <i class="fas fa-calendar-week"></i> Esta semana: <strong id="statProximas">0</strong>
+        </span>
+        <span class="tag tag-info" title="Total pendientes">
+            <i class="fas fa-clipboard-list"></i> Total: <strong id="statTotal">0</strong>
+        </span>
+    </div>
+</div>
+
+<!-- Tabla de OTs preventivas -->
+<div id="tableView" class="tableContainer">
+    <table class="dataTable">
+        <thead>
+            <tr>
+                <th>Número</th>
+                <th>Prioridad</th>
+                <th>Fecha prevista</th>
+                <th>Equipo</th>
+                <th>Gama / Título</th>
+                <th>Frecuencia</th>
+                <th>Estado</th>
+                <th>Días</th>
+            </tr>
+        </thead>
+        <tbody id="bodyPreventivo">
+            <tr>
+                <td colspan="8" class="emptyRow">Cargando...</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    // ─── Estado ───────────────────────────────────────────────────────────────────
+    let gamasCache = [];
+
+    // ─── Carga inicial ───────────────────────────────────────────────────────────
+    document.addEventListener('DOMContentLoaded', async () => {
+        setRefreshCallback(cargarPreventivos);
+        await cargarGamas();
+        await cargarPreventivos();
+    });
+
+    async function cargarGamas() {
+        try { gamasCache = await apiCall('/api/gamas') || []; } catch (e) { gamasCache = []; }
+    }
+
+    async function cargarPreventivos() {
+        try {
+            const data = await apiCall('/api/ordenes-preventivo');
+
+            // Stats
+            const total = data.length;
+            const vencidas = data.filter(o => o.vencida).length;
+            const proximas = data.filter(o => !o.vencida && o.diasRestantes !== null && o.diasRestantes <= 7).length;
+            document.getElementById('statTotal').textContent = formatoEspanol(total, 0);
+            document.getElementById('statVencidas').textContent = formatoEspanol(vencidas, 0);
+            document.getElementById('statProximas').textContent = formatoEspanol(proximas, 0);
+
+            const tbody = document.getElementById('bodyPreventivo');
+            if (!data.length) {
+                tbody.innerHTML = '<tr><td colspan="8" class="emptyRow">No hay órdenes preventivas pendientes</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(o => {
+                const diasLabel = o.diasRestantes === null ? '-'
+                    : o.vencida ? `${Math.abs(o.diasRestantes)}d vencida`
+                        : o.diasRestantes === 0 ? 'Hoy'
+                            : `${o.diasRestantes}d`;
+                const diasClass = o.vencida ? 'urgente' : (o.diasRestantes !== null && o.diasRestantes <= 7 ? 'alta' : 'baja');
+
+                const fechaFmt = o.fechaProgramada
+                    ? new Date(o.fechaProgramada).toLocaleDateString('es-ES')
+                    : '-';
+
+                return `
+            <tr class="row-${o.estado}" onclick="verOrden(${o.id})" style="cursor:pointer;">
+                <td style="white-space:nowrap;"><span class="codigoTag">${o.numero}</span></td>
+                <td style="white-space:nowrap;"><span class="tag tag-${o.prioridad}">${o.prioridad}</span></td>
+                <td style="white-space:nowrap;">${fechaFmt}</td>
+                <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;" title="${o.equipoNombre || '-'}">${o.equipoNombre || '-'}</td>
+                <td style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;" title="${o.gamaNombre || o.titulo || '-'}">${o.gamaNombre || o.titulo || '-'}</td>
+                <td style="white-space:nowrap;">${o.frecuenciaLabel || '-'}</td>
+                <td style="white-space:nowrap;"><span class="estado-${o.estado}">${formatEstado(o.estado)}</span></td>
+                <td style="white-space:nowrap;"><span class="tag tag-${diasClass}">${diasLabel}</span></td>
+            </tr>`;
+            }).join('');
+
+        } catch (e) {
+            document.getElementById('bodyPreventivo').innerHTML =
+                '<tr><td colspan="8" class="emptyRow">Error al cargar preventivos</td></tr>';
+            console.error(e);
+        }
+    }
+
+    // ─── Nueva OT Preventiva ────────────────────────────────────────────────────
+    async function nuevaOTPreventiva() {
+        let equiposHtml = '<option value="">-- Selecciona un equipo --</option>';
+        try {
+            const equipos = await apiCall('/api/equipos-lista');
+            equiposHtml += equipos.map(e => {
+                const indent = '\u00a0'.repeat(e.nivel * 4);
+                return `<option value="${e.tipo}|${e.id}">${indent}${e.nombre}</option>`;
+            }).join('');
+        } catch (e) { }
+
+        const gamasOpts = gamasCache.length
+            ? gamasCache.map(g => `<option value="${g.id}">${g.nombre} (${g.codigo})</option>`).join('')
+            : '<option value="">Sin gamas disponibles</option>';
+
+        const d = new Date();
+        const hoy = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+
+        const html = `
+    <form id="formNuevaPrev" onsubmit="event.preventDefault()">
+        <div class="formGroup">
+            <label>Título / Descripción *</label>
+            <input type="text" id="npTitulo" class="formControl" placeholder="Ej: Revisión mensual ensambladora" required>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+            <div class="formGroup">
+                <label>Equipo *</label>
+                <select id="npEquipo" class="formControl" required>${equiposHtml}</select>
+            </div>
+            <div class="formGroup">
+                <label>Gama de mantenimiento</label>
+                <select id="npGama" class="formControl">
+                    <option value="">Sin gama específica</option>
+                    ${gamasOpts}
+                </select>
+            </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;">
+            <div class="formGroup">
+                <label>Frecuencia (valor) *</label>
+                <input type="number" id="npFrecValor" class="formControl" min="1" value="30" required>
+            </div>
+            <div class="formGroup">
+                <label>Tipo de frecuencia *</label>
+                <select id="npFrecTipo" class="formControl">
+                    <option value="dias">Días</option>
+                    <option value="semanas">Semanas</option>
+                    <option value="meses">Meses</option>
+                </select>
+            </div>
+            <div class="formGroup">
+                <label>Prioridad</label>
+                <select id="npPrioridad" class="formControl">
+                    <option value="baja">Baja</option>
+                    <option value="media" selected>Media</option>
+                    <option value="alta">Alta</option>
+                    <option value="urgente">Urgente</option>
+                </select>
+            </div>
+        </div>
+        <div class="formGroup">
+            <label>Fecha de primera intervención *</label>
+            <input type="date" id="npFechaProg" class="formControl" value="${hoy}" required>
+        </div>
+        <div class="formGroup">
+            <label>Descripción / Trabajos a realizar</label>
+            <textarea id="npDescripcion" class="formControl" rows="3" placeholder="Detalle de los trabajos previstos..."></textarea>
+        </div>
+    </form>`;
+
+        const footer = `
+        <button class="btn btnSecondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn btnPrimary" onclick="confirmarNuevaPrev()">
+            <i class="fas fa-save"></i> Crear OT Preventiva
+        </button>`;
+
+        openModal('Nueva Orden de Trabajo Preventiva', html, footer);
+    }
+
+    async function confirmarNuevaPrev() {
+        const titulo = document.getElementById('npTitulo').value.trim();
+        const equipoRaw = document.getElementById('npEquipo').value;
+        const frecValor = parseInt(document.getElementById('npFrecValor').value);
+        const frecTipo = document.getElementById('npFrecTipo').value;
+        const fechaProg = document.getElementById('npFechaProg').value;
+        const prioridad = document.getElementById('npPrioridad').value;
+        const gamaIdRaw = document.getElementById('npGama').value;
+        const desc = document.getElementById('npDescripcion').value.trim();
+
+        if (!titulo || !equipoRaw || !frecValor || !fechaProg) {
+            showToast('Rellena los campos obligatorios', 'error');
+            return;
+        }
+
+        const [equipoTipo, equipoId] = equipoRaw.split('|');
+        try {
+            await apiCall('/api/ordenes', 'POST', {
+                tipo: 'preventivo',
+                titulo,
+                equipoTipo,
+                equipoId: parseInt(equipoId),
+                gamaId: gamaIdRaw ? parseInt(gamaIdRaw) : null,
+                frecuenciaTipo: frecTipo,
+                frecuenciaValor: frecValor,
+                prioridad,
+                fechaProgramada: fechaProg,
+                descripcionProblema: desc,
+            });
+            closeModal();
+            showToast('OT preventiva creada correctamente', 'success');
+            await cargarPreventivos();
+        } catch (e) {
+            showToast(e.message || 'Error al crear la OT', 'error');
+        }
+    }
+</script>
+{% endblock %}

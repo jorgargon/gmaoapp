@@ -1,0 +1,1017 @@
+{% extends "base.html" %}
+
+{% block head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/apexcharts@3.45.2/dist/apexcharts.min.js"></script>
+<style>
+/* ── Filtro bar ── */
+.filterGroup { display:flex; align-items:center; gap:0.5rem; }
+.filterGroup label { font-size:0.82rem; color:#555; white-space:nowrap; }
+.filterGroup input, .filterGroup select { padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:0.85rem; }
+
+/* ── Tabs ── */
+.tabNav {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #e0e0e0;
+    margin-bottom: 1.5rem;
+}
+.tabBtn {
+    padding: 0.6rem 1.25rem;
+    border: none;
+    background: none;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #888;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    margin-bottom: -2px;
+    transition: color .2s, border-color .2s;
+    white-space: nowrap;
+}
+.tabBtn:hover  { color: #1565C0; }
+.tabBtn.active { color: #1565C0; border-bottom-color: #1565C0; }
+.tabContent { display: none; }
+.tabContent.active { display: block; }
+
+/* ── Chart grid ── */
+.chartsGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+}
+.chartCard {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.chartCard.span2 { grid-column: span 2; }
+.chartCard.span3 { grid-column: span 3; }
+.chartCardHdr {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #f0f0f0;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #333;
+}
+.chartCardHdr .btnDl {
+    background: none;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 3px 8px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    color: #666;
+    transition: background .15s;
+}
+.chartCardHdr .btnDl:hover { background: #f5f5f5; }
+.chartCardBody {
+    padding: 1rem;
+    flex: 1;
+    position: relative;
+    min-height: 260px;
+}
+.chartLoading {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,.9);
+    font-size: 0.85rem; color: #999; gap: 0.5rem;
+}
+.chartEmpty {
+    display: flex; align-items: center; justify-content: center;
+    height: 100%; color: #bbb; flex-direction: column; gap: 0.5rem;
+    font-size: 0.85rem;
+}
+
+/* ── Tabla compacta en cards ── */
+.miniTable { width:100%; border-collapse:collapse; font-size:0.8rem; }
+.miniTable th { background:#f5f5f5; padding:5px 8px; text-align:left; font-weight:600; color:#555; border-bottom:1px solid #e0e0e0; position:sticky; top:0; }
+.miniTable td { padding:5px 8px; border-bottom:1px solid #f5f5f5; }
+.miniTable tr:last-child td { border-bottom:none; }
+.miniTable tr:hover td { background:#fafafa; }
+.scrollBox { max-height:280px; overflow-y:auto; }
+
+/* ── Pareto regla 80% ── */
+.rule80 { font-size:0.75rem; color:#888; margin-top:4px; text-align:center; }
+
+/* ── Responsive ── */
+@media (max-width: 1100px) {
+    .chartsGrid { grid-template-columns: repeat(2, 1fr); }
+    .chartCard.span3 { grid-column: span 2; }
+}
+@media (max-width: 700px) {
+    .chartsGrid { grid-template-columns: 1fr; }
+    .chartCard.span2, .chartCard.span3 { grid-column: span 1; }
+    .tabBtn { padding: 0.5rem 0.75rem; font-size: 0.78rem; }
+}
+
+/* ── Selector jerárquico ── */
+.alcanceRow {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.6rem 0.9rem;
+    background: #F5F7FA;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    margin-bottom: 1rem;
+}
+.alcanceRow label {
+    font-size: 0.8rem;
+    color: #555;
+    font-weight: 600;
+    white-space: nowrap;
+    margin-right: 0.25rem;
+}
+.alcanceStep { display: flex; align-items: center; gap: 0.3rem; }
+.alcanceStep select {
+    padding: 4px 8px;
+    font-size: 0.82rem;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #fff;
+    max-width: 200px;
+    cursor: pointer;
+}
+.alcanceSep { color: #bbb; font-size: 0.9rem; }
+.alcanceBreadcrumb {
+    margin-left: auto;
+    font-size: 0.78rem;
+    color: #888;
+    font-style: italic;
+    white-space: nowrap;
+}
+.alcanceBreadcrumb strong { color: #1565C0; font-style: normal; }
+.btnResetAlcance {
+    font-size: 0.75rem;
+    color: #999;
+    background: none;
+    border: 1px solid #e0e0e0;
+    border-radius: 5px;
+    padding: 3px 8px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.btnResetAlcance:hover { color: #555; border-color: #bbb; }
+</style>
+{% endblock %}
+
+{% block rightMenu %}
+<a href="{{ url_for('indicadores.index') }}" class="btn btnSecondary btnSm" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+    <i class="fas fa-arrow-left"></i> Volver
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="pageHeader">
+    <h2><i class="fas fa-chart-line"></i> Dashboards Gráficos</h2>
+</div>
+
+<!-- Filtros globales -->
+<div class="filtersBar" style="gap:1rem; align-items:flex-end; margin-bottom:1.25rem;">
+    <div class="filterGroup">
+        <label>Desde</label>
+        <input type="date" id="gFI" />
+    </div>
+    <div class="filterGroup">
+        <label>Hasta</label>
+        <input type="date" id="gFF" />
+    </div>
+    <button class="btn btnPrimary btnSm" onclick="actualizarTodo()">
+        <i class="fas fa-sync-alt"></i> Actualizar dashboards
+    </button>
+    <span id="periodoLabel" style="font-size:0.8rem; color:#888;"></span>
+</div>
+
+<!-- Selector jerárquico de alcance -->
+<div class="alcanceRow" id="alcanceRow">
+    <label><i class="fas fa-sitemap"></i> Alcance:</label>
+    <div class="alcanceStep" id="stepEmpresa">
+        <select id="selEmpresa" onchange="onSelectNivel('empresa')">
+            <option value="">— Toda la instalación —</option>
+        </select>
+    </div>
+    <span class="alcanceSep" id="sepPlanta" style="display:none;">›</span>
+    <div class="alcanceStep" id="stepPlanta" style="display:none;">
+        <select id="selPlanta" onchange="onSelectNivel('planta')">
+            <option value="">— Todas las plantas —</option>
+        </select>
+    </div>
+    <span class="alcanceSep" id="sepZona" style="display:none;">›</span>
+    <div class="alcanceStep" id="stepZona" style="display:none;">
+        <select id="selZona" onchange="onSelectNivel('zona')">
+            <option value="">— Todas las zonas —</option>
+        </select>
+    </div>
+    <span class="alcanceSep" id="sepLinea" style="display:none;">›</span>
+    <div class="alcanceStep" id="stepLinea" style="display:none;">
+        <select id="selLinea" onchange="onSelectNivel('linea')">
+            <option value="">— Todas las líneas —</option>
+        </select>
+    </div>
+    <span class="alcanceSep" id="sepMaquina" style="display:none;">›</span>
+    <div class="alcanceStep" id="stepMaquina" style="display:none;">
+        <select id="selMaquina" onchange="onSelectNivel('maquina')">
+            <option value="">— Todas las máquinas —</option>
+        </select>
+    </div>
+    <span class="alcanceSep" id="sepElemento" style="display:none;">›</span>
+    <div class="alcanceStep" id="stepElemento" style="display:none;">
+        <select id="selElemento" onchange="onSelectNivel('elemento')">
+            <option value="">— Todos los elementos —</option>
+        </select>
+    </div>
+    <span class="alcanceBreadcrumb" id="alcanceBreadcrumb">Toda la instalación</span>
+    <button class="btnResetAlcance" onclick="resetAlcance()" title="Limpiar selección de alcance">
+        <i class="fas fa-times"></i> Limpiar
+    </button>
+</div>
+
+<!-- Navegación de tabs -->
+<div class="tabNav">
+    <button class="tabBtn active" onclick="cambiarTab('tipos', this)">
+        <i class="fas fa-chart-bar"></i> Intervenciones
+    </button>
+    <button class="tabBtn" onclick="cambiarTab('prioridades', this)">
+        <i class="fas fa-exclamation-circle"></i> Prioridades
+    </button>
+    <button class="tabBtn" onclick="cambiarTab('equipos', this)">
+        <i class="fas fa-cogs"></i> TOP Equipos
+    </button>
+    <button class="tabBtn" onclick="cambiarTab('tiempos', this)">
+        <i class="fas fa-clock"></i> Tiempos
+    </button>
+</div>
+
+<!-- ═══════════════════════════════════════ TAB 1: INTERVENCIONES -->
+<div class="tabContent active" id="tab-tipos">
+    <div class="chartsGrid">
+        <!-- Barras apiladas por tipo/mes -->
+        <div class="chartCard span2">
+            <div class="chartCardHdr">
+                <span><i class="fas fa-chart-bar" style="color:#1565C0;"></i> Intervenciones por tipo y mes</span>
+                <button class="btnDl" onclick="dlChart('cTiposMes','intervenciones_tipo')"><i class="fas fa-download"></i> PNG</button>
+            </div>
+            <div class="chartCardBody">
+                <div class="chartLoading" id="loadTiposMes"><i class="fas fa-spinner fa-spin"></i> Cargando...</div>
+                <canvas id="cTiposMes"></canvas>
+            </div>
+        </div>
+        <!-- Donut de distribución -->
+        <div class="chartCard">
+            <div class="chartCardHdr">
+                <span><i class="fas fa-chart-pie" style="color:#43A047;"></i> Distribución total</span>
+                <button class="btnDl" onclick="dlChart('cTiposDonut','distribucion_tipo')"><i class="fas fa-download"></i> PNG</button>
+            </div>
+            <div class="chartCardBody">
+                <div class="chartLoading" id="loadDonutTipo"><i class="fas fa-spinner fa-spin"></i></div>
+                <canvas id="cTiposDonut"></canvas>
+            </div>
+        </div>
+        <!-- Ratio correctivo -->
+        <div class="chartCard span3">
+            <div class="chartCardHdr">
+                <span><i class="fas fa-chart-line" style="color:#E53935;"></i> Evolución ratio correctivo (%)</span>
+                <button class="btnDl" onclick="dlChart('cRatioCorr','ratio_correctivo')"><i class="fas fa-download"></i> PNG</button>
+            </div>
+            <div class="chartCardBody" style="min-height:200px;">
+                <div class="chartLoading" id="loadRatioCorr"><i class="fas fa-spinner fa-spin"></i></div>
+                <canvas id="cRatioCorr"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════ TAB 2: PRIORIDADES -->
+<div class="tabContent" id="tab-prioridades">
+    <div class="chartsGrid">
+        <div class="chartCard">
+            <div class="chartCardHdr">
+                <span><i class="fas fa-chart-pie" style="color:#E53935;"></i> Distribución por prioridad</span>
+                <button class="btnDl" onclick="dlChart('cPrioDonut','prioridades_donut')"><i class="fas fa-download"></i> PNG</button>
+            </div>
+            <div class="chartCardBody">
+                <div class="chartLoading" id="loadPrioDonut"><i class="fas fa-spinner fa-spin"></i></div>
+                <canvas id="cPrioDonut"></canvas>
+            </div>
+        </div>
+        <div class="chartCard span2">
+            <div class="chartCardHdr">
+                <span><i class="fas fa-chart-bar" style="color:#FB8C00;"></i> Evolución mensual por prioridad</span>
+                <button class="btnDl" onclick="dlChart('cPrioMes','prioridades_mensual')"><i class="fas fa-download"></i> PNG</button>
+            </div>
+            <div class="chartCardBody">
+                <div class="chartLoading" id="loadPrioMes"><i class="fas fa-spinner fa-spin"></i></div>
+                <canvas id="cPrioMes"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════ TAB 3: TOP EQUIPOS -->
+<div class="tabContent" id="tab-equipos">
+    <div class="chartsGrid">
+        <!-- Pareto averías (span 2 cols) -->
+        <div class="chartCard span2">
+            <div class="chartCardHdr">
+                <span><i class="fas fa-sort-amount-down" style="color:#E53935;"></i> Pareto TOP 10 Equipos — Correctivas</span>
+                <button class="btnDl" onclick="dlChart('cPareto','pareto_averias')"><i class="fas fa-download"></i> PNG</button>
+            </div>
+            <div class="chartCardBody" style="min-height:320px;">
+                <div class="chartLoading" id="loadPareto"><i class="fas fa-spinner fa-spin"></i></div>
+                <canvas id="cPareto"></canvas>
+            </div>
+            <div class="rule80" id="rule80"></div>
+        </div>
+        <!-- Tabla Pareto -->
+        <div class="chartCard">
+            <div class="chartCardHdr"><span><i class="fas fa-table"></i> Tabla TOP Averías</span></div>
+            <div class="chartCardBody" style="padding:0; min-height:0;">
+                <div class="scrollBox">
+                    <table class="miniTable" id="tablaPareto">
+                        <thead><tr><th>#</th><th>Equipo</th><th>Línea</th><th>OTs</th><th>%</th><th>%Ac.</th><th>H.Paro</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <!-- TOP 10 por intervenciones -->
+        <div class="chartCard span2">
+            <div class="chartCardHdr">
+                <span><i class="fas fa-list-ol" style="color:#1E88E5;"></i> TOP 10 Equipos — Intervenciones totales</span>
+                <button class="btnDl" onclick="dlChart('cTopOT','top_intervenciones')"><i class="fas fa-download"></i> PNG</button>
+            </div>
+            <div class="chartCardBody" style="min-height:320px;">
+                <div class="chartLoading" id="loadTopOT"><i class="fas fa-spinner fa-spin"></i></div>
+                <canvas id="cTopOT"></canvas>
+            </div>
+        </div>
+        <!-- TOP 10 por paro -->
+        <div class="chartCard">
+            <div class="chartCardHdr">
+                <span><i class="fas fa-pause-circle" style="color:#E53935;"></i> TOP 10 — Horas de paro</span>
+                <button class="btnDl" onclick="dlChart('cTopParo','top_paro')"><i class="fas fa-download"></i> PNG</button>
+            </div>
+            <div class="chartCardBody" style="min-height:320px;">
+                <div class="chartLoading" id="loadTopParo"><i class="fas fa-spinner fa-spin"></i></div>
+                <canvas id="cTopParo"></canvas>
+            </div>
+        </div>
+        <!-- Heatmap -->
+        <div class="chartCard span3">
+            <div class="chartCardHdr">
+                <span><i class="fas fa-th" style="color:#6A1B9A;"></i> Heatmap — Intervenciones por equipo y mes (TOP 15)</span>
+            </div>
+            <div class="chartCardBody" style="min-height:400px; padding:0.5rem;">
+                <div class="chartLoading" id="loadHeatmap"><i class="fas fa-spinner fa-spin"></i></div>
+                <div id="cHeatmap"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════ TAB 4: TIEMPOS -->
+<div class="tabContent" id="tab-tiempos">
+    <div class="chartsGrid">
+        <!-- Horas por técnico -->
+        <div class="chartCard span2">
+            <div class="chartCardHdr">
+                <span><i class="fas fa-user-clock" style="color:#1E88E5;"></i> Horas imputadas por técnico y tipo</span>
+                <button class="btnDl" onclick="dlChart('cTecnicos','horas_tecnicos')"><i class="fas fa-download"></i> PNG</button>
+            </div>
+            <div class="chartCardBody" style="min-height:320px;">
+                <div class="chartLoading" id="loadTecnicos"><i class="fas fa-spinner fa-spin"></i></div>
+                <canvas id="cTecnicos"></canvas>
+            </div>
+        </div>
+        <!-- Tabla técnicos -->
+        <div class="chartCard">
+            <div class="chartCardHdr"><span><i class="fas fa-table"></i> Resumen Técnicos</span></div>
+            <div class="chartCardBody" style="padding:0; min-height:0;">
+                <div class="scrollBox">
+                    <table class="miniTable" id="tablaTecnicos">
+                        <thead><tr><th>Técnico</th><th>Total h</th><th>Nº OTs</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <!-- Tiempos por línea -->
+        <div class="chartCard span2">
+            <div class="chartCardHdr">
+                <span><i class="fas fa-stopwatch" style="color:#FB8C00;"></i> Tiempos de mantenimiento por línea</span>
+                <button class="btnDl" onclick="dlChart('cTiemposLinea','tiempos_linea')"><i class="fas fa-download"></i> PNG</button>
+            </div>
+            <div class="chartCardBody">
+                <div class="chartLoading" id="loadTiemposLinea"><i class="fas fa-spinner fa-spin"></i></div>
+                <canvas id="cTiemposLinea"></canvas>
+            </div>
+        </div>
+        <!-- Tabla tiempos por línea -->
+        <div class="chartCard">
+            <div class="chartCardHdr"><span><i class="fas fa-table"></i> Tabla Tiempos Líneas</span></div>
+            <div class="chartCardBody" style="padding:0; min-height:0;">
+                <div class="scrollBox">
+                    <table class="miniTable" id="tablaLineas">
+                        <thead><tr><th>Línea</th><th>OTs</th><th>T.Reacc.</th><th>T.Repar.</th><th>T.Paro</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Registro de Chart.js DataLabels plugin
+Chart.register(ChartDataLabels);
+
+// ── Instancias de gráficos (para destruir y recrear) ──────────────────────
+const _charts = {};
+let   _apexHeatmap = null;
+let   _loadedTabs  = new Set();   // tabs cuya carga ya se inició
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SELECTOR JERÁRQUICO DE ALCANCE
+// ═══════════════════════════════════════════════════════════════════════════
+const NIVELES = ['empresa', 'planta', 'zona', 'linea', 'maquina', 'elemento'];
+const PLACEHOLDERS = {
+    empresa: '— Toda la instalación —', planta: '— Todas las plantas —',
+    zona: '— Todas las zonas —', linea: '— Todas las líneas —',
+    maquina: '— Todas las máquinas —', elemento: '— Todos los elementos —'
+};
+const _sel = {};  // {empresa: {id, nombre}, planta: {...}, ...}
+
+async function _fetchHijos(nivel, parentId, selectId, placeholder) {
+    const url = `/informes/api/jerarquia?nivel=${nivel}${parentId ? '&parent_id=' + parentId : ''}`;
+    try {
+        const items = await fetch(url).then(r => r.json());
+        const sel = document.getElementById(selectId);
+        sel.innerHTML = `<option value="">${placeholder}</option>`;
+        items.forEach(it => {
+            const opt = document.createElement('option');
+            opt.value = it.id;
+            opt.textContent = it.codigo ? `${it.codigo} — ${it.nombre}` : it.nombre;
+            opt.dataset.nombre = it.nombre;
+            sel.appendChild(opt);
+        });
+    } catch(e) { console.warn('Error cargando jerarquía:', e); }
+}
+
+async function onSelectNivel(nivel) {
+    const capNivel = nivel.charAt(0).toUpperCase() + nivel.slice(1);
+    const sel = document.getElementById('sel' + capNivel);
+    const id = sel.value;
+    const nombre = sel.selectedOptions[0]?.dataset?.nombre || sel.selectedOptions[0]?.textContent || '';
+
+    if (id) { _sel[nivel] = { id, nombre }; }
+    else     { delete _sel[nivel]; }
+
+    // Limpiar niveles inferiores
+    const idx = NIVELES.indexOf(nivel);
+    for (let i = idx + 1; i < NIVELES.length; i++) {
+        const n = NIVELES[i];
+        delete _sel[n];
+        const s = document.getElementById('sel' + n.charAt(0).toUpperCase() + n.slice(1));
+        if (s) s.innerHTML = `<option value="">${PLACEHOLDERS[n]}</option>`;
+        _setStepVisible(n, false);
+    }
+
+    // Mostrar siguiente nivel si hay selección
+    if (id && idx < NIVELES.length - 1) {
+        const nextNivel = NIVELES[idx + 1];
+        await _fetchHijos(nivel, id,
+            'sel' + nextNivel.charAt(0).toUpperCase() + nextNivel.slice(1),
+            PLACEHOLDERS[nextNivel]);
+        _setStepVisible(nextNivel, true);
+    }
+
+    _updateBreadcrumb();
+    // Refrescar dashboards con el nuevo alcance
+    _loadedTabs.clear();
+    const tabActivo = document.querySelector('.tabContent.active');
+    if (tabActivo) cargarTab(tabActivo.id.replace('tab-', ''));
+}
+
+function _setStepVisible(nivel, visible) {
+    const cap = nivel.charAt(0).toUpperCase() + nivel.slice(1);
+    const step = document.getElementById('step' + cap);
+    const sep  = document.getElementById('sep'  + cap);
+    if (step) step.style.display = visible ? 'flex' : 'none';
+    if (sep)  sep.style.display  = visible ? 'inline' : 'none';
+}
+
+function _updateBreadcrumb() {
+    const bc = document.getElementById('alcanceBreadcrumb');
+    const parts = [];
+    for (const n of NIVELES) {
+        if (_sel[n]) parts.push(_sel[n].nombre);
+        else break;
+    }
+    bc.innerHTML = parts.length ? '<strong>' + parts.join(' › ') + '</strong>' : 'Toda la instalación';
+}
+
+function resetAlcance() {
+    for (const n of NIVELES) {
+        delete _sel[n];
+        const s = document.getElementById('sel' + n.charAt(0).toUpperCase() + n.slice(1));
+        if (s) s.value = '';
+    }
+    for (let i = 1; i < NIVELES.length; i++) _setStepVisible(NIVELES[i], false);
+    _updateBreadcrumb();
+    _loadedTabs.clear();
+    const tabActivo = document.querySelector('.tabContent.active');
+    if (tabActivo) cargarTab(tabActivo.id.replace('tab-', ''));
+}
+
+function _getAlcanceActual() {
+    let nivel = null, nivel_id = null;
+    for (const n of NIVELES) {
+        if (_sel[n]) { nivel = n; nivel_id = _sel[n].id; }
+        else break;
+    }
+    return { nivel, nivel_id };
+}
+
+// ── Inicialización de fechas ───────────────────────────────────────────────
+(function initFechas() {
+    const hoy = new Date();
+    const y = hoy.getFullYear();
+    document.getElementById('gFI').value = `${y}-01-01`;
+    document.getElementById('gFF').value = hoy.toISOString().split('T')[0];
+    // Cargar empresas en el selector
+    _fetchHijos('root', null, 'selEmpresa', PLACEHOLDERS.empresa);
+})();
+
+// ── Tabs ──────────────────────────────────────────────────────────────────
+function cambiarTab(tab, btn) {
+    document.querySelectorAll('.tabContent').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tabBtn').forEach(el => el.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    btn.classList.add('active');
+
+    // Carga diferida si el tab nunca se ha cargado
+    if (!_loadedTabs.has(tab)) {
+        cargarTab(tab);
+    }
+}
+
+// ── Actualizar todos los dashboards ───────────────────────────────────────
+function actualizarTodo() {
+    const fi = document.getElementById('gFI').value;
+    const ff = document.getElementById('gFF').value;
+    if (!fi || !ff) { showToast('Selecciona el período', 'warning'); return; }
+    const fi_d = new Date(fi), ff_d = new Date(ff);
+    document.getElementById('periodoLabel').textContent =
+        `${fi_d.toLocaleDateString('es-ES')} — ${ff_d.toLocaleDateString('es-ES')}`;
+
+    _loadedTabs.clear();
+    // Cargar el tab activo inmediatamente
+    const tabActivo = document.querySelector('.tabContent.active');
+    if (tabActivo) {
+        const id = tabActivo.id.replace('tab-', '');
+        cargarTab(id);
+    }
+}
+
+function cargarTab(tab) {
+    _loadedTabs.add(tab);
+    if (tab === 'tipos')       cargarTipos();
+    if (tab === 'prioridades') cargarPrioridades();
+    if (tab === 'equipos')     cargarEquipos();
+    if (tab === 'tiempos')     cargarTiempos();
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function qs() {
+    let s = `fecha_inicio=${document.getElementById('gFI').value}&fecha_fin=${document.getElementById('gFF').value}`;
+    const { nivel, nivel_id } = _getAlcanceActual();
+    if (nivel && nivel_id) s += `&nivel=${nivel}&nivel_id=${nivel_id}`;
+    return s;
+}
+
+function destroyChart(id) {
+    if (_charts[id]) { _charts[id].destroy(); delete _charts[id]; }
+}
+
+function hideLoading(id) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+}
+
+function showEmpty(canvasId, msg) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const parent = canvas.parentElement;
+    hideLoading('load' + canvasId.replace('c','').replace(/^./, c => c.toUpperCase()));
+    canvas.style.display = 'none';
+    const div = document.createElement('div');
+    div.className = 'chartEmpty';
+    div.innerHTML = `<i class="fas fa-inbox" style="font-size:2rem;"></i><span>${msg || 'Sin datos'}</span>`;
+    parent.appendChild(div);
+}
+
+function dlChart(canvasId, filename) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) { showToast('Gráfico no disponible', 'warning'); return; }
+    const link = document.createElement('a');
+    link.download = filename + '.png';
+    link.href = canvas.toDataURL('image/png', 1.0);
+    link.click();
+}
+
+// Opciones comunes Chart.js
+const _baseOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+        datalabels: { display: false },   // desactivado globalmente, activar por chart
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+    },
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB 1: INTERVENCIONES
+// ═══════════════════════════════════════════════════════════════════════════
+function cargarTipos() {
+    fetch(`/informes/api/dashboard/tipos-mensuales?${qs()}`)
+        .then(r => r.json())
+        .then(data => {
+            // Barras apiladas
+            hideLoading('loadTiposMes');
+            destroyChart('cTiposMes');
+            if (data.bar.datasets.length === 0) { showEmpty('cTiposMes', 'Sin datos'); return; }
+            _charts['cTiposMes'] = new Chart(document.getElementById('cTiposMes'), {
+                type: 'bar',
+                data: data.bar,
+                options: { ..._baseOpts,
+                    scales: {
+                        x: { stacked: true },
+                        y: { stacked: true, title: { display: true, text: 'Nº OTs' } },
+                    },
+                },
+            });
+
+            // Donut
+            hideLoading('loadDonutTipo');
+            destroyChart('cTiposDonut');
+            const d = data.donut;
+            _charts['cTiposDonut'] = new Chart(document.getElementById('cTiposDonut'), {
+                type: 'doughnut',
+                data: {
+                    labels: d.labels,
+                    datasets: [{ data: d.data, backgroundColor: d.colors, borderWidth: 2 }],
+                },
+                options: { ..._baseOpts,
+                    plugins: {
+                        ..._baseOpts.plugins,
+                        datalabels: {
+                            display: true, color: '#fff', font: { weight: 'bold', size: 11 },
+                            formatter: (v, ctx) => {
+                                const total = ctx.dataset.data.reduce((a,b)=>a+b, 0);
+                                return total > 0 ? Math.round(v/total*100)+'%' : '';
+                            },
+                        },
+                        legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 12 } },
+                    },
+                },
+            });
+
+            // Ratio correctivo
+            hideLoading('loadRatioCorr');
+            destroyChart('cRatioCorr');
+            const rc = data.ratio_correctivo;
+            _charts['cRatioCorr'] = new Chart(document.getElementById('cRatioCorr'), {
+                type: 'line',
+                data: {
+                    labels: rc.labels,
+                    datasets: [
+                        {
+                            label: '% Correctivo',
+                            data: rc.data,
+                            borderColor: '#E53935', backgroundColor: 'rgba(229,57,53,.1)',
+                            tension: 0.3, fill: true, pointRadius: 5,
+                        },
+                        {
+                            label: 'Obj. 30%',
+                            data: rc.labels.map(() => 30),
+                            borderColor: '#FB8C00', borderDash: [6, 4],
+                            borderWidth: 2, pointRadius: 0,
+                        },
+                    ],
+                },
+                options: { ..._baseOpts,
+                    scales: {
+                        y: { min: 0, max: 100, title: { display: true, text: '%' } },
+                    },
+                    plugins: { ..._baseOpts.plugins, datalabels: { display: false } },
+                },
+            });
+        })
+        .catch(() => showToast('Error al cargar intervenciones', 'error'));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB 2: PRIORIDADES
+// ═══════════════════════════════════════════════════════════════════════════
+function cargarPrioridades() {
+    fetch(`/informes/api/dashboard/prioridades?${qs()}`)
+        .then(r => r.json())
+        .then(data => {
+            hideLoading('loadPrioDonut');
+            destroyChart('cPrioDonut');
+            const d = data.donut;
+            _charts['cPrioDonut'] = new Chart(document.getElementById('cPrioDonut'), {
+                type: 'doughnut',
+                data: {
+                    labels: d.labels,
+                    datasets: [{ data: d.data, backgroundColor: d.colors, borderWidth: 2 }],
+                },
+                options: { ..._baseOpts,
+                    plugins: {
+                        ..._baseOpts.plugins,
+                        datalabels: {
+                            display: true, color: '#fff', font: { weight: 'bold', size: 11 },
+                            formatter: (v, ctx) => {
+                                const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
+                                return total > 0 ? Math.round(v/total*100)+'%' : '';
+                            },
+                        },
+                        legend: { position: 'right', labels: { font: { size: 11 }, boxWidth: 12 } },
+                    },
+                },
+            });
+
+            hideLoading('loadPrioMes');
+            destroyChart('cPrioMes');
+            _charts['cPrioMes'] = new Chart(document.getElementById('cPrioMes'), {
+                type: 'bar',
+                data: data.bar,
+                options: { ..._baseOpts,
+                    scales: {
+                        x: { stacked: true },
+                        y: { stacked: true, title: { display: true, text: 'Nº OTs' } },
+                    },
+                },
+            });
+        })
+        .catch(() => showToast('Error al cargar prioridades', 'error'));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB 3: TOP EQUIPOS
+// ═══════════════════════════════════════════════════════════════════════════
+function cargarEquipos() {
+    // Pareto + tabla
+    fetch(`/informes/api/dashboard/pareto-averias?${qs()}&limit=10`)
+        .then(r => r.json())
+        .then(pareto => {
+            hideLoading('loadPareto');
+            destroyChart('cPareto');
+            if (!pareto.labels.length) { showEmpty('cPareto', 'Sin datos correctivos'); return; }
+
+            _charts['cPareto'] = new Chart(document.getElementById('cPareto'), {
+                data: {
+                    labels: pareto.labels,
+                    datasets: [
+                        {
+                            type: 'bar',
+                            label: 'Nº OTs correctivas',
+                            data: pareto.counts,
+                            backgroundColor: pareto.counts.map((_, i) =>
+                                pareto.cumulative_pct[i] <= 80 ? '#E53935' : '#FFCDD2'),
+                            yAxisID: 'y',
+                            order: 2,
+                        },
+                        {
+                            type: 'line',
+                            label: '% Acumulado',
+                            data: pareto.cumulative_pct,
+                            borderColor: '#1565C0', backgroundColor: 'transparent',
+                            yAxisID: 'y2', pointRadius: 4, tension: 0.2, order: 1,
+                        },
+                    ],
+                },
+                options: { ..._baseOpts,
+                    scales: {
+                        y:  { position: 'left',  title: { display: true, text: 'Nº OTs' } },
+                        y2: { position: 'right', min: 0, max: 100,
+                              title: { display: true, text: '% Acumulado' },
+                              grid: { drawOnChartArea: false } },
+                    },
+                    plugins: {
+                        ..._baseOpts.plugins,
+                        annotation: null,
+                        datalabels: { display: false },
+                    },
+                },
+            });
+
+            // Leyenda regla 80%
+            const idx80 = pareto.cumulative_pct.findIndex(p => p >= 80);
+            if (idx80 >= 0) {
+                document.getElementById('rule80').textContent =
+                    `El 80% de las averías está concentrado en ${idx80 + 1} equipo(s). Regla de Pareto.`;
+            }
+
+            // Tabla
+            const tbody = document.querySelector('#tablaPareto tbody');
+            tbody.innerHTML = pareto.tabla.map((r, i) => `
+                <tr style="${r.pct_acum <= 80 ? 'background:#FFF3F3;' : ''}">
+                    <td>${i+1}</td>
+                    <td style="font-size:0.78rem;">${esc(r.label)}</td>
+                    <td style="font-size:0.75rem; color:#888;">${esc(r.linea)}</td>
+                    <td><strong>${r.num_ot}</strong></td>
+                    <td>${r.pct}%</td>
+                    <td style="font-weight:${r.pct_acum<=80?'700':'400'}; color:${r.pct_acum<=80?'#E53935':'inherit'};">${r.pct_acum}%</td>
+                    <td>${r.horas_paro}</td>
+                </tr>
+            `).join('');
+        })
+        .catch(() => showToast('Error al cargar Pareto', 'error'));
+
+    // TOP Equipos barras horizontales
+    fetch(`/informes/api/dashboard/top-equipos?${qs()}&limit=10`)
+        .then(r => r.json())
+        .then(data => {
+            // OTs
+            hideLoading('loadTopOT');
+            destroyChart('cTopOT');
+            if (!data.chart_ot.labels.length) { showEmpty('cTopOT', 'Sin datos'); return; }
+            _charts['cTopOT'] = new Chart(document.getElementById('cTopOT'), {
+                type: 'bar',
+                data: {
+                    labels: data.chart_ot.labels,
+                    datasets: [{
+                        label: 'Nº Intervenciones',
+                        data: data.chart_ot.data,
+                        backgroundColor: '#1E88E5',
+                    }],
+                },
+                options: { ..._baseOpts, indexAxis: 'y',
+                    scales: { x: { title: { display: true, text: 'Nº OTs' } } },
+                    plugins: { ..._baseOpts.plugins, datalabels: {
+                        display: true, anchor: 'end', align: 'end',
+                        color: '#333', font: { size: 10 },
+                    }},
+                },
+            });
+
+            // Paro
+            hideLoading('loadTopParo');
+            destroyChart('cTopParo');
+            _charts['cTopParo'] = new Chart(document.getElementById('cTopParo'), {
+                type: 'bar',
+                data: {
+                    labels: data.chart_paro.labels,
+                    datasets: [{
+                        label: 'Horas de paro',
+                        data: data.chart_paro.data,
+                        backgroundColor: '#E53935',
+                    }],
+                },
+                options: { ..._baseOpts, indexAxis: 'y',
+                    scales: { x: { title: { display: true, text: 'Horas' } } },
+                    plugins: { ..._baseOpts.plugins, datalabels: {
+                        display: true, anchor: 'end', align: 'end',
+                        color: '#333', font: { size: 10 },
+                    }},
+                },
+            });
+        })
+        .catch(() => showToast('Error al cargar TOP equipos', 'error'));
+
+    // Heatmap ApexCharts
+    fetch(`/informes/api/dashboard/heatmap-equipos?${qs()}&limit=15`)
+        .then(r => r.json())
+        .then(series => {
+            hideLoading('loadHeatmap');
+            if (_apexHeatmap) { _apexHeatmap.destroy(); _apexHeatmap = null; }
+
+            if (!series.length) {
+                document.getElementById('cHeatmap').innerHTML =
+                    '<div class="chartEmpty" style="height:200px;"><i class="fas fa-inbox" style="font-size:2rem;"></i><span>Sin datos</span></div>';
+                return;
+            }
+            _apexHeatmap = new ApexCharts(document.getElementById('cHeatmap'), {
+                chart: { type: 'heatmap', height: 400, toolbar: { show: false } },
+                series: series,
+                dataLabels: { enabled: true, style: { fontSize: '10px' } },
+                colors: ['#1565C0'],
+                plotOptions: { heatmap: { shadeIntensity: 0.5, colorScale: {
+                    ranges: [
+                        { from: 0, to: 0,  color: '#F5F5F5', name: 'Sin OTs' },
+                        { from: 1, to: 3,  color: '#BBDEFB', name: '1-3' },
+                        { from: 4, to: 7,  color: '#64B5F6', name: '4-7' },
+                        { from: 8, to: 15, color: '#1E88E5', name: '8-15' },
+                        { from: 16, to: 999, color: '#0D47A1', name: '>15' },
+                    ],
+                }}},
+                xaxis: { type: 'category', labels: { style: { fontSize: '11px' } } },
+                yaxis: { labels: { style: { fontSize: '10px' } } },
+                legend: { show: true, position: 'top' },
+                tooltip: { y: { formatter: v => v + ' OTs' } },
+            });
+            _apexHeatmap.render();
+        })
+        .catch(() => showToast('Error al cargar heatmap', 'error'));
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TAB 4: TIEMPOS
+// ═══════════════════════════════════════════════════════════════════════════
+function cargarTiempos() {
+    // Tiempos técnicos
+    fetch(`/informes/api/dashboard/tiempos-tecnicos?${qs()}`)
+        .then(r => r.json())
+        .then(data => {
+            hideLoading('loadTecnicos');
+            destroyChart('cTecnicos');
+
+            if (!data.chart.labels.length) { showEmpty('cTecnicos', 'Sin registros de tiempo'); return; }
+
+            _charts['cTecnicos'] = new Chart(document.getElementById('cTecnicos'), {
+                type: 'bar',
+                data: data.chart,
+                options: { ..._baseOpts, indexAxis: 'y',
+                    scales: {
+                        x: { stacked: true, title: { display: true, text: 'Horas' } },
+                        y: { stacked: true },
+                    },
+                },
+            });
+
+            // Tabla técnicos
+            const tipos = data.tipos || [];
+            const tbody = document.querySelector('#tablaTecnicos tbody');
+            // Reconstruir cabecera dinámica
+            const thead = document.querySelector('#tablaTecnicos thead tr');
+            thead.innerHTML = '<th>Técnico</th>' +
+                tipos.map(t => `<th>${esc(t.charAt(0).toUpperCase()+t.slice(1))}</th>`).join('') +
+                '<th>Total h</th><th>OTs</th>';
+
+            tbody.innerHTML = data.tabla.map(r => `
+                <tr>
+                    <td><strong>${esc(r.tecnico)}</strong></td>
+                    ${tipos.map(t => `<td>${r[t] ?? 0}</td>`).join('')}
+                    <td><strong>${r.total}</strong></td>
+                    <td>${r.num_ot}</td>
+                </tr>
+            `).join('');
+        })
+        .catch(() => showToast('Error al cargar tiempos técnicos', 'error'));
+
+    // Tiempos por línea
+    fetch(`/informes/api/dashboard/tiempos-linea?${qs()}`)
+        .then(r => r.json())
+        .then(data => {
+            hideLoading('loadTiemposLinea');
+            destroyChart('cTiemposLinea');
+
+            if (!data.chart.labels.length) { showEmpty('cTiemposLinea', 'Sin OTs cerradas con fechas'); return; }
+
+            _charts['cTiemposLinea'] = new Chart(document.getElementById('cTiemposLinea'), {
+                type: 'bar',
+                data: data.chart,
+                options: { ..._baseOpts,
+                    scales: { y: { title: { display: true, text: 'Horas' } } },
+                    plugins: { ..._baseOpts.plugins, datalabels: { display: false } },
+                },
+            });
+
+            // Tabla
+            const tbody = document.querySelector('#tablaLineas tbody');
+            tbody.innerHTML = data.tabla.map(r => `
+                <tr>
+                    <td><strong>${esc(r.linea)}</strong></td>
+                    <td>${r.count}</td>
+                    <td>${r.avg_reaccion} h</td>
+                    <td>${r.avg_reparacion} h</td>
+                    <td style="font-weight:600; color:#E53935;">${r.total_paro} h</td>
+                </tr>
+            `).join('');
+        })
+        .catch(() => showToast('Error al cargar tiempos línea', 'error'));
+}
+
+// ── Cargar tab inicial al entrar en la página ──────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+    actualizarTodo();
+});
+
+function esc(s) {
+    return s == null ? '' : String(s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+{% endblock %}

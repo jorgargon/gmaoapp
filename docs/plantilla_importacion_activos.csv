@@ -1,0 +1,4 @@
+Empresa_Codigo,Empresa_Nombre,Planta_Codigo,Planta_Nombre,Zona_Codigo,Zona_Nombre,Linea_Codigo,Linea_Nombre,Maquina_Codigo,Maquina_Nombre,Maquina_Modelo,Maquina_Fabricante,Maquina_NumSerie,Maquina_Descripcion,Maquina_Criticidad,Maquina_Estado,Maquina_FechaInstalacion
+EMP01,Empresa Principal,PL01,Planta Principal,ZN01,Zona Producción,LN01,Línea Envasado,MQ001,Envasadora Rotativa,ER-2000,PackMaster,SN-12345,Máquina principal de envasado,alta,operativo,2023-01-15
+EMP01,Empresa Principal,PL01,Planta Principal,ZN01,Zona Producción,LN01,Línea Envasado,MQ002,Etiquetadora,ET-500,LabelTech,SN-67890,Etiquetadora automática,media,operativo,2023-02-20
+EMP01,Empresa Principal,PL01,Planta Principal,ZN02,Zona Almacén,LN02,Transporte Interno,MQ003,Carretilla Elevadora,CE-30,LiftCorp,SN-11223,Carretilla eléctrica 3T,baja,operativo,2022-11-10

@@ -1,0 +1,112 @@
+{% extends "mobile/base.html" %}
+{% block title %}GMAO – Otras órdenes{% endblock %}
+
+{% block header %}
+  <span class="m-header-title">
+    <i class="fas fa-folder-open" style="margin-right:6px;opacity:.8"></i>
+    Otras órdenes
+  </span>
+  <div class="m-header-actions">
+    <a href="{{ url_for('mobile.nueva_ot') }}" class="m-header-btn" title="Nueva OT">
+      <i class="fas fa-plus"></i>
+    </a>
+    <button class="m-header-btn" onclick="doMobileLogout()" title="Salir">
+      <i class="fas fa-sign-out-alt"></i>
+    </button>
+  </div>
+{% endblock %}
+
+{% block content %}
+
+{% macro ot_card(ot) %}
+{% set ruta = ot._ruta %}
+<a class="m-ot-card prio-{{ ot.prioridad }}" href="{{ url_for('mobile.ver_ot', id=ot.id) }}">
+  <div class="m-ot-card-inner">
+    <div class="m-ot-card-top">
+      <span class="m-ot-numero">{{ ot.numero }}</span>
+      <span class="m-ot-titulo">{{ ot.titulo }}</span>
+      <div class="m-ot-badges">
+        <span class="m-badge m-badge-estado-{{ ot.estado }}">
+          {% if ot.estado == 'en_curso' %}<i class="fas fa-play-circle"></i>{% endif %}
+          {{ ot.estado | replace('_', ' ') }}
+        </span>
+        <span class="m-badge m-badge-tipo-otro">{{ ot.tipo | replace('_', ' ') }}</span>
+      </div>
+    </div>
+
+    {% if ruta %}
+    <div class="m-ot-equipo">
+      <i class="fas fa-map-marker-alt"></i>
+      <div class="m-equipo-path">
+        {% for nivel in ruta %}
+          {% if not loop.first %}
+            <span class="m-equipo-path-sep"><i class="fas fa-chevron-right"></i></span>
+          {% endif %}
+          <span class="m-equipo-path-item tipo-{{ nivel.tipo }}">{{ nivel.nombre }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="m-ot-meta">
+      <span class="m-badge m-badge-prio-{{ ot.prioridad }}">{{ ot.prioridad }}</span>
+      {% if ot.tecnicoAsignado %}
+        <span><i class="fas fa-user"></i> {{ ot.tecnicoAsignado }}</span>
+      {% endif %}
+      {% if ot.fechaProgramada %}
+        <span><i class="fas fa-calendar-check"></i> {{ ot.fechaProgramada.strftime('%d/%m/%Y') }}</span>
+      {% endif %}
+    </div>
+  </div>
+</a>
+{% endmacro %}
+
+<div class="m-tabs">
+  <button class="m-tab-btn active" id="tab-mis" onclick="switchTab('mis')">
+    <i class="fas fa-user-cog"></i>
+    Mis órdenes
+    <span class="m-tab-count">{{ mis_ots | length }}</span>
+  </button>
+  <button class="m-tab-btn" id="tab-pendientes" onclick="switchTab('pendientes')">
+    <i class="fas fa-list-ul"></i>
+    Activas
+    <span class="m-tab-count">{{ ots_pendientes | length }}</span>
+  </button>
+</div>
+
+<div class="m-tab-panel active" id="panel-mis">
+  {% if mis_ots %}
+    {% for ot in mis_ots %}{{ ot_card(ot) }}{% endfor %}
+  {% else %}
+    <div class="m-empty">
+      <i class="fas fa-folder-open"></i>
+      <div class="m-empty-title">Sin órdenes asignadas</div>
+      <div class="m-empty-sub">No tienes mejoras ni proyectos activos asignados</div>
+    </div>
+  {% endif %}
+</div>
+
+<div class="m-tab-panel" id="panel-pendientes">
+  {% if ots_pendientes %}
+    {% for ot in ots_pendientes %}{{ ot_card(ot) }}{% endfor %}
+  {% else %}
+    <div class="m-empty">
+      <i class="fas fa-check-circle"></i>
+      <div class="m-empty-title">Sin órdenes activas</div>
+      <div class="m-empty-sub">No hay mejoras ni proyectos pendientes ni en curso</div>
+    </div>
+  {% endif %}
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function switchTab(tab) {
+    document.querySelectorAll('.m-tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.m-tab-panel').forEach(p => p.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    document.getElementById('panel-' + tab).classList.add('active');
+  }
+</script>
+{% endblock %}

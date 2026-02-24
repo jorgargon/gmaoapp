@@ -1,0 +1,573 @@
+{% extends "base.html" %}
+
+{% block rightMenu %}
+<!-- Botones de acción específicos de Recambios -->
+{% if current_user and current_user.nivel != 'tecnico' %}
+<button class="rightbarAction primary" onclick="mostrarFormularioRecambio()" title="Añadir nuevo recambio">
+    <span class="actionCircle"><i class="fas fa-plus"></i></span>
+    <span class="actionLabel">Nuevo</span>
+</button>
+<div class="rightbarDivider"></div>
+<button class="rightbarAction success" onclick="mostrarEntradaRapida()" title="Entrada rápida de stock">
+    <span class="actionCircle"><i class="fas fa-arrow-down"></i></span>
+    <span class="actionLabel">Entrada</span>
+</button>
+<button class="rightbarAction warning" onclick="mostrarSalidaRapida()" title="Salida rápida de stock">
+    <span class="actionCircle"><i class="fas fa-arrow-up"></i></span>
+    <span class="actionLabel">Salida</span>
+</button>
+<div class="rightbarDivider"></div>
+{% endif %}
+<button class="rightbarAction danger" onclick="filtrarStockBajo()" title="Filtrar solo stock bajo">
+    <span class="actionCircle"><i class="fas fa-exclamation-triangle"></i></span>
+    <span class="actionLabel">Stock Bajo</span>
+</button>
+<button class="rightbarAction" onclick="cargarRecambios()" title="Recargar listado">
+    <span class="actionCircle"><i class="fas fa-sync-alt"></i></span>
+    <span class="actionLabel">Recargar</span>
+</button>
+<button class="rightbarAction" onclick="exportarRecambios()" title="Exportar inventario">
+    <span class="actionCircle"><i class="fas fa-file-excel"></i></span>
+    <span class="actionLabel">Exportar</span>
+</button>
+{% endblock %}
+
+{% block content %}
+<div class="pageHeader">
+    <h2><i class="fas fa-puzzle-piece"></i> Gestión de Recambios</h2>
+    <div class="pageActions">
+        {% if current_user and current_user.nivel != 'tecnico' %}
+        <button class="btn btnPrimary" onclick="mostrarFormularioRecambio()">
+            <i class="fas fa-plus"></i> Nuevo Recambio
+        </button>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="filtersBar">
+    <div class="filterGroup">
+        <input type="text" id="busqueda" class="formControl" placeholder="Buscar por código, nombre..."
+            onkeyup="filtrarRecambios()">
+    </div>
+    <div class="filterGroup">
+        <label class="checkLabel">
+            <input type="checkbox" id="soloStockBajo" onchange="filtrarRecambios()">
+            <span>Solo stock bajo</span>
+        </label>
+    </div>
+    <div class="filterGroup">
+        <select id="categoriaFiltro" class="formControl" onchange="filtrarRecambios()">
+            <option value="">Todas las categorías</option>
+        </select>
+    </div>
+</div>
+
+<!-- Estadísticas rápidas -->
+<div class="statsBar" id="statsBar">
+    <div class="statItem">
+        <span class="statValue" id="totalRecambios">0</span>
+        <span class="statLabel">Total Recambios</span>
+    </div>
+    <div class="statItem danger">
+        <span class="statValue" id="stockBajoCount">0</span>
+        <span class="statLabel">Stock Bajo</span>
+    </div>
+    <div class="statItem">
+        <span class="statValue" id="valorTotal">0 €</span>
+        <span class="statLabel">Valor Stock</span>
+    </div>
+</div>
+
+<!-- Tabla de recambios -->
+<div class="tableContainer">
+    <table class="dataTable" id="tablaRecambios">
+        <thead>
+            <tr>
+                <th>Código</th>
+                <th>Nombre</th>
+                <th>Categoría</th>
+                <th>Stock</th>
+                <th>Ubicación</th>
+                <th>Proveedor</th>
+                <th>Precio</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody id="recambiosBody">
+            <tr>
+                <td colspan="8" class="loadingRow"><i class="fas fa-spinner fa-spin"></i> Cargando...</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    let recambiosData = [];
+
+    document.addEventListener('DOMContentLoaded', function () {
+        cargarRecambios();
+    });
+
+    async function cargarRecambios() {
+        try {
+            const busqueda = document.getElementById('busqueda').value;
+            const stockBajo = document.getElementById('soloStockBajo').checked;
+
+            let url = `/api/recambios?q=${encodeURIComponent(busqueda)}`;
+            if (stockBajo) url += '&stockBajo=true';
+
+            recambiosData = await apiCall(url);
+            renderRecambios();
+            updateStats();
+        } catch (error) {
+            showToast('Error al cargar recambios', 'error');
+        }
+    }
+
+    function filtrarRecambios() {
+        cargarRecambios();
+    }
+
+    function renderRecambios() {
+        const tbody = document.getElementById('recambiosBody');
+
+        if (recambiosData.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="emptyRow">No se encontraron recambios</td></tr>';
+            return;
+        }
+
+        let html = '';
+        recambiosData.forEach(r => {
+            const stockClass = r.stockBajo ? 'stockBajo' : (r.stockActual > r.stockMaximo * 0.8 ? 'stockAlto' : '');
+
+            html += `
+            <tr class="${r.stockBajo ? 'rowWarning' : ''}">
+                <td><span class="codigoTag">${r.codigo}</span></td>
+                <td>
+                    <strong>${r.nombre}</strong>
+                    ${r.descripcion ? `<br><small class="textMuted">${r.descripcion.substring(0, 50)}${r.descripcion.length > 50 ? '...' : ''}</small>` : ''}
+                </td>
+                <td>${r.categoria || '-'}</td>
+                <td>
+                    <div class="stockIndicator ${stockClass}">
+                        <span class="stockValue">${r.stockActual}</span>
+                        <span class="stockLimits">(${r.stockMinimo} - ${r.stockMaximo})</span>
+                    </div>
+                </td>
+                <td>${r.ubicacion || '-'}</td>
+                <td>${r.proveedor || '-'}</td>
+                <td>${r.precioUnitario ? formatoEspanol(r.precioUnitario, 2) + ' €' : '-'}</td>
+                <td class="actionsCell">
+                    <button class="btnIcon" onclick="verRecambio(${r.id})" title="Ver detalles">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    ${window.USER_NIVEL !== 'tecnico' ? `
+                    <button class="btnIcon" onclick="editarRecambio(${r.id})" title="Editar">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btnIcon btnSuccess" onclick="registrarEntrada(${r.id})" title="Entrada">
+                        <i class="fas fa-plus"></i>
+                    </button>
+                    <button class="btnIcon btnWarning" onclick="registrarSalida(${r.id})" title="Salida">
+                        <i class="fas fa-minus"></i>
+                    </button>
+                    ` : ''}
+                </td>
+            </tr>
+        `;
+        });
+
+        tbody.innerHTML = html;
+    }
+
+    function updateStats() {
+        document.getElementById('totalRecambios').textContent = formatoEspanol(recambiosData.length, 0);
+        document.getElementById('stockBajoCount').textContent = formatoEspanol(recambiosData.filter(r => r.stockBajo).length, 0);
+
+        const valorTotal = recambiosData.reduce((sum, r) => sum + (r.stockActual * (r.precioUnitario || 0)), 0);
+        document.getElementById('valorTotal').textContent = formatoEspanol(valorTotal, 2) + ' €';
+    }
+
+    function mostrarFormularioRecambio(recambio = null) {
+        const esEdicion = recambio !== null;
+
+        const html = `
+        <form id="formRecambio" onsubmit="event.preventDefault(); return false;">
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Código *</label>
+                    <input type="text" id="recCodigo" class="formControl" value="${recambio?.codigo || ''}" required>
+                </div>
+                <div class="formGroup">
+                    <label>Categoría</label>
+                    <input type="text" id="recCategoria" class="formControl" value="${recambio?.categoria || ''}" 
+                           list="categorias" placeholder="Ej: Eléctrico, Mecánico...">
+                    <datalist id="categorias">
+                        <option value="Eléctrico">
+                        <option value="Mecánico">
+                        <option value="Neumático">
+                        <option value="Hidráulico">
+                        <option value="Electrónico">
+                        <option value="Consumible">
+                    </datalist>
+                </div>
+            </div>
+            <div class="formGroup">
+                <label>Nombre *</label>
+                <input type="text" id="recNombre" class="formControl" value="${recambio?.nombre || ''}" required>
+            </div>
+            <div class="formGroup">
+                <label>Descripción</label>
+                <textarea id="recDescripcion" class="formControl" rows="2">${recambio?.descripcion || ''}</textarea>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Stock Mínimo</label>
+                    <input type="number" id="recStockMin" class="formControl" step="any" value="${recambio?.stockMinimo || 0}" min="0">
+                </div>
+                <div class="formGroup">
+                    <label>Stock Máximo</label>
+                    <input type="number" id="recStockMax" class="formControl" step="any" value="${recambio?.stockMaximo || 100}" min="0">
+                </div>
+                ${esEdicion ? '' : `
+                <div class="formGroup">
+                    <label>Stock Inicial</label>
+                    <input type="number" id="recStockActual" class="formControl" step="any" value="0" min="0">
+                </div>
+                `}
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Ubicación</label>
+                    <input type="text" id="recUbicacion" class="formControl" value="${recambio?.ubicacion || ''}" 
+                           placeholder="Ej: Almacén A, Estante 3">
+                </div>
+                <div class="formGroup">
+                    <label>Unidad</label>
+                    <select id="recUnidad" class="formControl">
+                        <option value="unidad" ${recambio?.unidadMedida === 'unidad' ? 'selected' : ''}>Unidad</option>
+                        <option value="metro" ${recambio?.unidadMedida === 'metro' ? 'selected' : ''}>Metro</option>
+                        <option value="litro" ${recambio?.unidadMedida === 'litro' ? 'selected' : ''}>Litro</option>
+                        <option value="kg" ${recambio?.unidadMedida === 'kg' ? 'selected' : ''}>Kilogramo</option>
+                    </select>
+                </div>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Proveedor</label>
+                    <input type="text" id="recProveedor" class="formControl" value="${recambio?.proveedor || ''}">
+                </div>
+                <div class="formGroup">
+                    <label>Código Proveedor</label>
+                    <input type="text" id="recCodProveedor" class="formControl" value="${recambio?.codigoProveedor || ''}">
+                </div>
+            </div>
+            <div class="formGroup">
+                <label>Precio Unitario (€)</label>
+                <input type="number" id="recPrecio" class="formControl" value="${recambio?.precioUnitario || 0}" min="0" step="0.01">
+            </div>
+        </form>
+    `;
+
+        const footer = `
+        <button class="btn btnSecondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn btnPrimary" onclick="guardarRecambio(${recambio?.id || 'null'})">${esEdicion ? 'Guardar' : 'Crear'}</button>
+    `;
+
+        openModal(esEdicion ? 'Editar Recambio' : 'Nuevo Recambio', html, footer);
+    }
+
+    async function guardarRecambio(id) {
+        const data = {
+            codigo: document.getElementById('recCodigo').value,
+            nombre: document.getElementById('recNombre').value,
+            descripcion: document.getElementById('recDescripcion').value,
+            categoria: document.getElementById('recCategoria').value,
+            stockMinimo: parseFloat(document.getElementById('recStockMin').value) || 0,
+            stockMaximo: parseFloat(document.getElementById('recStockMax').value) || 100,
+            ubicacion: document.getElementById('recUbicacion').value,
+            unidadMedida: document.getElementById('recUnidad').value,
+            proveedor: document.getElementById('recProveedor').value,
+            codigoProveedor: document.getElementById('recCodProveedor').value,
+            precioUnitario: parseFloat(document.getElementById('recPrecio').value) || 0
+        };
+
+        // Solo para nuevos recambios
+        const stockActualEl = document.getElementById('recStockActual');
+        if (stockActualEl) {
+            data.stockActual = parseFloat(stockActualEl.value) || 0;
+        }
+
+        if (!data.codigo || !data.nombre) {
+            showToast('Completa los campos obligatorios', 'error');
+            return;
+        }
+
+        try {
+            if (id) {
+                await apiCall(`/api/recambio/${id}`, 'PUT', data);
+            } else {
+                await apiCall('/api/recambio', 'POST', data);
+            }
+            closeModal();
+            cargarRecambios();
+            showToast(id ? 'Recambio actualizado' : 'Recambio creado', 'success');
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    async function editarRecambio(id) {
+        const recambio = await apiCall(`/api/recambio/${id}`);
+        mostrarFormularioRecambio(recambio);
+    }
+
+    async function verRecambio(id) {
+        try {
+            const r = await apiCall(`/api/recambio/${id}`);
+            const movimientos = await apiCall(`/api/recambio/${id}/movimientos`);
+
+            let html = `
+            <div class="detalleRecambio">
+                <div class="infoGrid">
+                    <div class="infoItem">
+                        <label>Código</label>
+                        <span class="codigoTag">${r.codigo}</span>
+                    </div>
+                    <div class="infoItem">
+                        <label>Categoría</label>
+                        <span>${r.categoria || '-'}</span>
+                    </div>
+                    <div class="infoItem full">
+                        <label>Nombre</label>
+                        <span>${r.nombre}</span>
+                    </div>
+                    <div class="infoItem full">
+                        <label>Descripción</label>
+                        <span>${r.descripcion || '-'}</span>
+                    </div>
+                    <div class="infoItem">
+                        <label>Ubicación</label>
+                        <span>${r.ubicacion || '-'}</span>
+                    </div>
+                    <div class="infoItem">
+                        <label>Proveedor</label>
+                        <span>${r.proveedor || '-'}</span>
+                    </div>
+                    <div class="infoItem">
+                        <label>Precio</label>
+                        <span>${r.precioUnitario ? formatoEspanol(r.precioUnitario, 2) + ' €' : '-'}</span>
+                    </div>
+                </div>
+                
+                <div class="stockBox ${r.stockActual <= r.stockMinimo ? 'danger' : ''}">
+                    <div class="stockMain">
+                        <span class="stockNumber">${r.stockActual}</span>
+                        <span class="stockUnit">${r.unidadMedida}(s)</span>
+                    </div>
+                    <div class="stockLimits">
+                        <span>Mín: ${r.stockMinimo}</span>
+                        <span>Máx: ${r.stockMaximo}</span>
+                    </div>
+                    <div class="stockBar">
+                        <div class="stockProgress" style="width: ${Math.min(100, (r.stockActual / r.stockMaximo) * 100)}%"></div>
+                    </div>
+                </div>
+                
+                <h4>Últimos Movimientos</h4>
+                <div class="movimientosLista">
+        `;
+
+            if (movimientos.length === 0) {
+                html += '<p class="emptyState">Sin movimientos registrados</p>';
+            } else {
+                movimientos.slice(0, 10).forEach(m => {
+                    const icon = m.tipo === 'entrada' ? 'arrow-down' : (m.tipo === 'salida' ? 'arrow-up' : 'equals');
+                    const color = m.tipo === 'entrada' ? 'success' : (m.tipo === 'salida' ? 'danger' : 'info');
+                    html += `
+                    <div class="movimientoItem ${color}">
+                        <i class="fas fa-${icon}"></i>
+                        <div class="movInfo">
+                            <span class="movCantidad">${m.tipo === 'entrada' ? '+' : '-'}${Math.abs(m.cantidad)}</span>
+                            <span class="movMotivo">${m.motivo || m.tipo}</span>
+                        </div>
+                        <div class="movMeta">
+                            <span>${new Date(m.fecha).toLocaleDateString('es-ES')}</span>
+                            <span>${m.stockAnterior} → ${m.stockPosterior}</span>
+                        </div>
+                    </div>
+                `;
+                });
+            }
+
+            html += '</div></div>';
+
+            const footer = window.USER_NIVEL !== 'tecnico' ? `
+            <button class="btn btnSuccess" onclick="closeModal(); registrarEntrada(${id})">
+                <i class="fas fa-plus"></i> Entrada
+            </button>
+            <button class="btn btnWarning" onclick="closeModal(); registrarSalida(${id})">
+                <i class="fas fa-minus"></i> Salida
+            </button>
+            <button class="btn btnSecondary" onclick="closeModal()">Cerrar</button>
+        ` : `<button class="btn btnSecondary" onclick="closeModal()">Cerrar</button>`;
+
+            openModal(r.nombre, html, footer);
+        } catch (error) {
+            console.error('Error en verRecambio:', error);
+            showToast('Error al cargar el recambio: ' + error.message, 'error');
+        }
+    }
+
+    function registrarEntrada(id) {
+        mostrarFormularioMovimiento(id, 'entrada');
+    }
+
+    function registrarSalida(id) {
+        mostrarFormularioMovimiento(id, 'salida');
+    }
+
+    function mostrarFormularioMovimiento(id, tipo) {
+        const recambio = recambiosData.find(r => r.id === id);
+
+        // Opciones según tipo de movimiento
+        const opcionesEntrada = [
+            { value: 'compra', label: 'Compra a proveedor' },
+            { value: 'devolucion_sin_uso', label: 'Devolución sin utilizar' },
+            { value: 'ajuste_inventario', label: 'Ajuste de inventario' },
+            { value: 'transferencia_entrada', label: 'Transferencia desde otra ubicación' }
+        ];
+
+        const opcionesSalida = [
+            { value: 'consumo_ot', label: 'Consumo en Orden de Trabajo' },
+            { value: 'ajuste_inventario', label: 'Ajuste de inventario' },
+            { value: 'devolucion_defectuoso', label: 'Devolución por defecto' },
+            { value: 'recambio_danado', label: 'Recambio en mal estado / obsoleto' },
+            { value: 'transferencia_salida', label: 'Transferencia a otra ubicación' }
+        ];
+
+        const opciones = tipo === 'entrada' ? opcionesEntrada : opcionesSalida;
+        const opcionesHtml = opciones.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+
+        const precioActual = recambio?.precioUnitario || 0;
+
+        const html = `
+        <div class="movimientoForm">
+            <p>Recambio: <strong>${recambio?.nombre || 'ID ' + id}</strong></p>
+            <p>Stock actual: <strong>${recambio?.stockActual || '?'}</strong></p>
+            <p>Precio actual: <strong>${formatoEspanol(precioActual, 2)} €</strong></p>
+            
+            <div class="formGroup">
+                <label>Tipo de ${tipo === 'entrada' ? 'entrada' : 'salida'} *</label>
+                <select id="movSubTipo" class="formControl" onchange="toggleCampoPrecio('${tipo}')" required>
+                    ${opcionesHtml}
+                </select>
+            </div>
+            <div class="formGroup">
+                <label>Cantidad</label>
+                <input type="number" id="movCantidad" class="formControl formControlLg" value="1" step="any" min="0" autofocus>
+            </div>
+            ${tipo === 'entrada' ? `
+            <div class="formGroup" id="campoPrecioContainer" style="display: block;">
+                <label>Nuevo precio unitario (€)</label>
+                <input type="number" id="movNuevoPrecio" class="formControl" value="${precioActual.toFixed(2)}" min="0" step="0.01">
+                <small class="formHint">Solo se actualizará si el tipo es "Compra a proveedor"</small>
+            </div>
+            ` : ''}
+            <div class="formGroup">
+                <label>Observaciones (opcional)</label>
+                <input type="text" id="movMotivo" class="formControl" placeholder="Notas adicionales...">
+            </div>
+            <div class="formGroup">
+                <label>Documento Ref. (opcional)</label>
+                <input type="text" id="movDocumento" class="formControl" placeholder="Nº Albarán, OT...">
+            </div>
+        </div>
+    `;
+
+        const footer = `
+        <button class="btn btnSecondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn ${tipo === 'entrada' ? 'btnSuccess' : 'btnWarning'}" onclick="confirmarMovimiento(${id}, '${tipo}')">
+            Confirmar ${tipo === 'entrada' ? 'Entrada' : 'Salida'}
+        </button>
+    `;
+
+        openModal(tipo === 'entrada' ? 'Registrar Entrada' : 'Registrar Salida', html, footer);
+
+        // Inicializar visibilidad del campo precio
+        if (tipo === 'entrada') {
+            toggleCampoPrecio('entrada');
+        }
+    }
+
+    function toggleCampoPrecio(tipo) {
+        if (tipo !== 'entrada') return;
+        const container = document.getElementById('campoPrecioContainer');
+        const subTipo = document.getElementById('movSubTipo').value;
+        if (container) {
+            container.style.display = subTipo === 'compra' ? 'block' : 'none';
+        }
+    }
+
+    async function confirmarMovimiento(id, tipo) {
+        const subTipo = document.getElementById('movSubTipo').value;
+        const data = {
+            tipo,
+            subTipo,
+            cantidad: parseFloat(document.getElementById('movCantidad').value),
+            motivo: document.getElementById('movMotivo').value,
+            documentoRef: document.getElementById('movDocumento').value
+        };
+
+        // Si es entrada y compra, incluir el nuevo precio
+        if (tipo === 'entrada' && subTipo === 'compra') {
+            const nuevoPrecioEl = document.getElementById('movNuevoPrecio');
+            if (nuevoPrecioEl) {
+                data.nuevoPrecio = parseFloat(nuevoPrecioEl.value) || null;
+            }
+        }
+
+        if (!data.cantidad || data.cantidad <= 0) {
+            showToast('Introduce una cantidad válida', 'error');
+            return;
+        }
+
+        try {
+            const result = await apiCall(`/api/recambio/${id}/movimiento`, 'POST', data);
+            closeModal();
+            cargarRecambios();
+            let mensaje = `${tipo === 'entrada' ? 'Entrada' : 'Salida'} registrada. Stock: ${result.stockActual}`;
+            if (tipo === 'entrada' && subTipo === 'compra' && data.nuevoPrecio) {
+                mensaje += ` | Precio: ${result.precioActual ? formatoEspanol(result.precioActual, 2) : formatoEspanol(data.nuevoPrecio, 2)} €`;
+            }
+            showToast(mensaje, 'success');
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    // =========================================
+    // FUNCIONES AUXILIARES PARA RIGHTBAR
+    // =========================================
+
+    function filtrarStockBajo() {
+        document.getElementById('soloStockBajo').checked = !document.getElementById('soloStockBajo').checked;
+        filtrarRecambios();
+    }
+
+    function exportarRecambios() {
+        // Placeholder - implementar exportación a Excel
+        showToast('Función de exportación en desarrollo', 'info');
+    }
+
+    function mostrarEntradaRapida() {
+        showToast('Selecciona un recambio y haz clic en el botón + para registrar entrada', 'info');
+    }
+
+    function mostrarSalidaRapida() {
+        showToast('Selecciona un recambio y haz clic en el botón - para registrar salida', 'info');
+    }
+
+</script>
+{% endblock %}

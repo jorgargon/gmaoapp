@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>{% block title %}GMAO Móvil{% endblock %}</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='images/logoWhite.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css') }}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  {% block head %}{% endblock %}
+</head>
+<body class="movil-body">
+
+  <!-- Header -->
+  <header class="m-header">
+    {% block header %}
+    <span class="m-header-title">
+      <i class="fas fa-tools" style="margin-right:6px;opacity:.7"></i>GMAO Técnico
+    </span>
+    <div class="m-header-actions">
+      <a href="{{ url_for('mobile.home') }}" class="m-header-btn" title="Inicio">
+        <i class="fas fa-home"></i>
+      </a>
+      <button class="m-header-btn" onclick="doMobileLogout()" title="Salir">
+        <i class="fas fa-sign-out-alt"></i>
+      </button>
+    </div>
+    {% endblock %}
+  </header>
+
+  <!-- Content -->
+  <main class="m-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Bottom nav -->
+  <nav class="m-nav">
+    <a href="{{ url_for('mobile.home') }}"
+       class="m-nav-item {% if request.endpoint == 'mobile.home' %}active{% endif %}">
+      <i class="fas fa-wrench"></i>
+      <span>Correctivo</span>
+    </a>
+    <a href="{{ url_for('mobile.preventivo') }}"
+       class="m-nav-item {% if request.endpoint == 'mobile.preventivo' %}active{% endif %}">
+      <i class="fas fa-shield-alt"></i>
+      <span>Preventivo</span>
+    </a>
+    <a href="{{ url_for('mobile.otras') }}"
+       class="m-nav-item {% if request.endpoint == 'mobile.otras' %}active{% endif %}">
+      <i class="fas fa-folder-open"></i>
+      <span>Otras</span>
+    </a>
+    <a href="{{ url_for('mobile.nueva_ot') }}"
+       class="m-nav-item {% if request.endpoint == 'mobile.nueva_ot' %}active{% endif %}">
+      <i class="fas fa-plus-circle"></i>
+      <span>Nueva OT</span>
+    </a>
+  </nav>
+
+  <!-- Toast global -->
+  <div class="m-toast" id="mToast"></div>
+
+  <script>
+    // Logout
+    function doMobileLogout() {
+      fetch('/api/auth/logout', { method: 'POST' })
+        .then(() => { window.location.href = '/login'; });
+    }
+
+    // Toast
+    function mToast(msg, type) {
+      const t = document.getElementById('mToast');
+      t.textContent = msg;
+      t.className = 'm-toast show ' + (type || '');
+      setTimeout(() => { t.className = 'm-toast'; }, 3000);
+    }
+
+    // Collapsible sections
+    document.addEventListener('DOMContentLoaded', function() {
+      document.querySelectorAll('.m-section-header').forEach(h => {
+        h.addEventListener('click', () => {
+          h.closest('.m-section').classList.toggle('collapsed');
+        });
+      });
+    });
+  </script>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

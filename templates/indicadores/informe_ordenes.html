@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+    .badgeTipo { display:inline-block; padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:600; text-transform:uppercase; }
+    .tipo-correctivo { background:#FFEBEE; color:#C62828; }
+    .tipo-preventivo { background:#E8F5E9; color:#1B5E20; }
+    .tipo-mejora     { background:#E3F2FD; color:#0D47A1; }
+    .tipo-predictivo { background:#FFF3E0; color:#E65100; }
+    .badgeEstado { display:inline-block; padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:600; }
+    .estado-pendiente  { background:#FFF9C4; color:#827717; }
+    .estado-asignada   { background:#E3F2FD; color:#1565C0; }
+    .estado-en_curso   { background:#FFF3E0; color:#E65100; }
+    .estado-cerrada    { background:#E8F5E9; color:#2E7D32; }
+    .estado-cancelada  { background:#FAFAFA; color:#9E9E9E; }
+    .badgePrioridad { display:inline-block; padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:600; }
+    .prio-urgente { background:#FFEBEE; color:#B71C1C; }
+    .prio-alta    { background:#FFF3E0; color:#BF360C; }
+    .prio-media   { background:#E3F2FD; color:#0D47A1; }
+    .prio-baja    { background:#F3E5F5; color:#4A148C; }
+    .rowTotales   { background:#E3F2FD; font-weight:700; }
+    .infoPanel { display:flex; gap:1.5rem; flex-wrap:wrap; margin-bottom:1rem; }
+    .infoBox { background:#fff; border:1px solid #e0e0e0; border-radius:8px; padding:0.75rem 1.25rem; min-width:130px; text-align:center; }
+    .infoBox .val { font-size:1.4rem; font-weight:700; color:#1565C0; }
+    .infoBox .lbl { font-size:0.75rem; color:#666; margin-top:2px; }
+    .filterGroup { display:flex; align-items:center; gap:0.5rem; }
+    .filterGroup label { font-size:0.82rem; color:#555; white-space:nowrap; }
+    .filterGroup input, .filterGroup select { padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:0.85rem; }
+</style>
+{% endblock %}
+
+{% block rightMenu %}
+<button class="btn btnPrimary btnSm" onclick="exportarExcel()" title="Exportar a Excel">
+    <i class="fas fa-file-excel"></i> Excel
+</button>
+<a href="{{ url_for('indicadores.index') }}" class="btn btnSecondary btnSm" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+    <i class="fas fa-arrow-left"></i> Volver
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="pageHeader">
+    <h2><i class="fas fa-clipboard-list"></i> Informe de Órdenes de Trabajo</h2>
+</div>
+
+<!-- Filtros -->
+<div class="filtersBar" style="gap:1rem; align-items:flex-end;">
+    <div class="filterGroup">
+        <label>Desde</label>
+        <input type="date" id="fInicio" />
+    </div>
+    <div class="filterGroup">
+        <label>Hasta</label>
+        <input type="date" id="fFin" />
+    </div>
+    <div class="filterGroup">
+        <label>Tipo</label>
+        <select id="fTipo">
+            <option value="">Todos</option>
+            <option value="correctivo">Correctivo</option>
+            <option value="preventivo">Preventivo</option>
+            <option value="mejora">Mejora</option>
+            <option value="predictivo">Predictivo</option>
+        </select>
+    </div>
+    <div class="filterGroup">
+        <label>Estado</label>
+        <select id="fEstado">
+            <option value="">Todos</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="asignada">Asignada</option>
+            <option value="en_curso">En curso</option>
+            <option value="cerrada">Cerrada</option>
+            <option value="cancelada">Cancelada</option>
+        </select>
+    </div>
+    <button class="btn btnPrimary btnSm" onclick="cargar()"><i class="fas fa-search"></i> Consultar</button>
+</div>
+
+<!-- Panel de resumen -->
+<div class="infoPanel" id="infoPanel" style="display:none;">
+    <div class="infoBox"><div class="val" id="sumOTs">-</div><div class="lbl">Órdenes</div></div>
+    <div class="infoBox"><div class="val" id="sumHoras">-</div><div class="lbl">Horas intervención</div></div>
+    <div class="infoBox"><div class="val" id="sumParo">-</div><div class="lbl">Horas paro</div></div>
+    <div class="infoBox"><div class="val" id="sumRec">-</div><div class="lbl">Coste recambios</div></div>
+    <div class="infoBox"><div class="val" id="sumTaller">-</div><div class="lbl">Coste talleres</div></div>
+    <div class="infoBox" style="border-color:#1565C0;"><div class="val" id="sumTotal" style="color:#1565C0;">-</div><div class="lbl">Coste total</div></div>
+</div>
+
+<!-- Buscador -->
+<div style="margin-bottom:0.5rem; display:flex; align-items:center; gap:0.5rem;">
+    <i class="fas fa-search" style="color:#999;"></i>
+    <input type="text" id="buscar" placeholder="Buscar en resultados..." style="padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:0.85rem; width:260px;" oninput="filtrarTabla()">
+    <span id="contadorFilas" style="font-size:0.8rem; color:#888;"></span>
+</div>
+
+<!-- Tabla -->
+<div class="tableContainer" style="overflow-x:auto;">
+    <table class="dataTable small" id="tablaOT">
+        <thead>
+            <tr>
+                <th>Nº Orden</th>
+                <th>Solicitud</th>
+                <th>Inicio</th>
+                <th>Fin</th>
+                <th>Equipo</th>
+                <th>Tipo</th>
+                <th>Prioridad</th>
+                <th>Estado</th>
+                <th>Técnico</th>
+                <th style="text-align:right;">H. Inter.</th>
+                <th style="text-align:right;">H. Paro</th>
+                <th style="text-align:right;">Recambios €</th>
+                <th style="text-align:right;">Talleres €</th>
+                <th style="text-align:right;">Total €</th>
+            </tr>
+        </thead>
+        <tbody id="tablaBody"></tbody>
+        <tfoot id="tablaFoot"></tfoot>
+    </table>
+    <div id="noData" style="display:none; text-align:center; padding:3rem; color:#999;">
+        <i class="fas fa-inbox" style="font-size:2rem; margin-bottom:0.5rem; display:block;"></i>
+        No hay órdenes de trabajo para los filtros seleccionados.
+    </div>
+    <div id="loadingMsg" style="display:none; text-align:center; padding:3rem; color:#999;">
+        <i class="fas fa-spinner fa-spin" style="font-size:1.5rem;"></i> Cargando...
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let _allRows = [];
+
+    // Inicializar fechas: mes actual
+    (function() {
+        const hoy = new Date();
+        const y = hoy.getFullYear(), m = String(hoy.getMonth() + 1).padStart(2, '0');
+        document.getElementById('fInicio').value = `${y}-${m}-01`;
+        document.getElementById('fFin').value = `${y}-${m}-${String(new Date(y, hoy.getMonth()+1, 0).getDate()).padStart(2,'0')}`;
+    })();
+
+    function cargar() {
+        const params = new URLSearchParams({
+            fecha_inicio: document.getElementById('fInicio').value,
+            fecha_fin:    document.getElementById('fFin').value,
+            tipo:         document.getElementById('fTipo').value,
+            estado:       document.getElementById('fEstado').value,
+        });
+
+        document.getElementById('loadingMsg').style.display = 'block';
+        document.getElementById('noData').style.display = 'none';
+        document.getElementById('tablaBody').innerHTML = '';
+        document.getElementById('tablaFoot').innerHTML = '';
+        document.getElementById('infoPanel').style.display = 'none';
+
+        fetch(`/informes/api/ordenes?${params}`)
+            .then(r => r.json())
+            .then(data => {
+                document.getElementById('loadingMsg').style.display = 'none';
+                _allRows = data.rows || [];
+                renderizarTabla(_allRows);
+                actualizarPanel(data.totales || {}, _allRows.length);
+            })
+            .catch(err => {
+                document.getElementById('loadingMsg').style.display = 'none';
+                showToast('Error al cargar datos: ' + err.message, 'error');
+            });
+    }
+
+    function renderizarTabla(rows) {
+        const tbody = document.getElementById('tablaBody');
+        const tfoot = document.getElementById('tablaFoot');
+        const noData = document.getElementById('noData');
+
+        if (!rows.length) {
+            tbody.innerHTML = '';
+            tfoot.innerHTML = '';
+            noData.style.display = 'block';
+            document.getElementById('contadorFilas').textContent = '0 resultados';
+            return;
+        }
+        noData.style.display = 'none';
+        document.getElementById('contadorFilas').textContent = `${rows.length} resultados`;
+
+        tbody.innerHTML = rows.map(r => `
+            <tr>
+                <td><strong>${esc(r.numero)}</strong></td>
+                <td>${esc(r.fecha_creacion)}</td>
+                <td>${esc(r.fecha_inicio)}</td>
+                <td>${esc(r.fecha_fin)}</td>
+                <td>
+                    <div style="font-size:0.8rem; color:#1565C0; font-weight:600;">${esc(r.equipo_codigo)}</div>
+                    <div style="font-size:0.82rem;">${esc(r.equipo_nombre)}</div>
+                </td>
+                <td><span class="badgeTipo tipo-${esc(r.tipo)}">${esc(r.tipo)}</span></td>
+                <td><span class="badgePrioridad prio-${esc(r.prioridad)}">${esc(r.prioridad)}</span></td>
+                <td><span class="badgeEstado estado-${esc(r.estado)}">${esc(r.estado)}</span></td>
+                <td>${esc(r.tecnico_asignado)}</td>
+                <td style="text-align:right;">${fmt(r.horas_intervencion)}</td>
+                <td style="text-align:right;">${fmt(r.horas_paro)}</td>
+                <td style="text-align:right;">${fmtEur(r.coste_recambios)}</td>
+                <td style="text-align:right;">${fmtEur(r.coste_talleres)}</td>
+                <td style="text-align:right; font-weight:600;">${fmtEur(r.coste_total)}</td>
+            </tr>
+        `).join('');
+
+        // Fila de totales en tfoot
+        const tot = rows.reduce((acc, r) => {
+            acc.h += r.horas_intervencion || 0;
+            acc.hp += r.horas_paro || 0;
+            acc.rec += r.coste_recambios || 0;
+            acc.tal += r.coste_talleres || 0;
+            acc.tot += r.coste_total || 0;
+            return acc;
+        }, { h: 0, hp: 0, rec: 0, tal: 0, tot: 0 });
+
+        tfoot.innerHTML = `
+            <tr class="rowTotales">
+                <td colspan="9" style="text-align:right; padding-right:1rem;">TOTALES (${rows.length} órdenes)</td>
+                <td style="text-align:right;">${fmt(tot.h)}</td>
+                <td style="text-align:right;">${fmt(tot.hp)}</td>
+                <td style="text-align:right;">${fmtEur(tot.rec)}</td>
+                <td style="text-align:right;">${fmtEur(tot.tal)}</td>
+                <td style="text-align:right;">${fmtEur(tot.tot)}</td>
+            </tr>
+        `;
+    }
+
+    function actualizarPanel(totales, n) {
+        document.getElementById('sumOTs').textContent = n;
+        document.getElementById('sumHoras').textContent = fmt(totales.horas_intervencion || 0) + ' h';
+        document.getElementById('sumParo').textContent = fmt(totales.horas_paro || 0) + ' h';
+        document.getElementById('sumRec').textContent = fmtEur(totales.coste_recambios || 0);
+        document.getElementById('sumTaller').textContent = fmtEur(totales.coste_talleres || 0);
+        document.getElementById('sumTotal').textContent = fmtEur(totales.coste_total || 0);
+        document.getElementById('infoPanel').style.display = 'flex';
+    }
+
+    function filtrarTabla() {
+        const q = document.getElementById('buscar').value.trim().toLowerCase();
+        if (!q) {
+            renderizarTabla(_allRows);
+            return;
+        }
+        const filtered = _allRows.filter(r =>
+            Object.values(r).some(v => String(v).toLowerCase().includes(q))
+        );
+        renderizarTabla(filtered);
+    }
+
+    function exportarExcel() {
+        const params = new URLSearchParams({
+            fecha_inicio: document.getElementById('fInicio').value,
+            fecha_fin:    document.getElementById('fFin').value,
+            tipo:         document.getElementById('fTipo').value,
+            estado:       document.getElementById('fEstado').value,
+        });
+        window.location.href = `/informes/api/ordenes/excel?${params}`;
+    }
+
+    function esc(s) { return s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function fmt(v) { return v == null ? '-' : parseFloat(v).toLocaleString('es-ES', {minimumFractionDigits:0, maximumFractionDigits:2}); }
+    function fmtEur(v) { return v == null ? '-' : parseFloat(v).toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €'; }
+</script>
+{% endblock %}
