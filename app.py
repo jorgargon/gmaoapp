@@ -1550,6 +1550,7 @@ def _generarSiguienteOTPreventivo(orden):
         existente = OrdenTrabajo.query.filter_by(
             tipo='preventivo',
             gamaId=orden.gamaId,
+            equipoTipo=orden.equipoTipo,
             equipoId=orden.equipoId
         ).filter(OrdenTrabajo.id > orden.id).first()
         if existente:
@@ -2582,6 +2583,9 @@ def generarOTDesdeAsignacion(id):
         equipoTipo=asignacion.equipoTipo,
         equipoId=asignacion.equipoId,
         asignacionGamaId=asignacion.id,
+        gamaId=asignacion.gamaId,
+        frecuenciaTipo=asignacion.frecuenciaTipo,
+        frecuenciaValor=asignacion.frecuenciaValor,
         tiempoEstimado=gama.tiempoEstimado / 60 if gama.tiempoEstimado else None,  # Convertir minutos a horas
         fechaProgramada=datetime.combine(asignacion.proximaEjecucion, datetime.min.time()) if asignacion.proximaEjecucion else None
     )
