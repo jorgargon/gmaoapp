@@ -1524,6 +1524,10 @@ def cambiarEstadoOrden(id):
             orden.fechaFin = datetime.now()
         orden.cerradoPor = data.get('cerradoPor', 'Sistema')
     
+    # Validar que haya técnico asignado si se pone como 'asignada'
+    if nuevoEstado == 'asignada' and not (orden.tecnicoAsignado and orden.tecnicoAsignado.strip()):
+        return jsonify({'error': 'No se puede marcar como asignada sin un técnico asignado'}), 400
+
     orden.estado = nuevoEstado
     db.session.commit()
 

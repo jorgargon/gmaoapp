@@ -3,40 +3,87 @@
 {% block head %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css" />
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
-<script src="{{ url_for('static', filename='js/ordenes-common.js') }}"></script>
+<script src="{{ url_for('static', filename='js/ordenes-common.js') }}?v=20260226"></script>
 <style>
-.equipo-ruta-cell {
-    max-width: 220px;
-    font-size: 0.78em;
-    line-height: 1.6;
-    white-space: normal;
-}
-.equipo-ruta-path {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 2px;
-}
-.equipo-ruta-item {
-    display: inline-flex;
-    align-items: center;
-    gap: 3px;
-    padding: 1px 5px;
-    border-radius: 3px;
-    font-size: 0.85em;
-    font-weight: 500;
-    white-space: nowrap;
-}
-.equipo-ruta-item.tipo-planta  { background: #e8f5e9; color: #2e7d32; }
-.equipo-ruta-item.tipo-zona    { background: #e3f2fd; color: #1565c0; }
-.equipo-ruta-item.tipo-linea   { background: #fff3e0; color: #e65100; }
-.equipo-ruta-item.tipo-maquina { background: #f3e5f5; color: #6a1b9a; }
-.equipo-ruta-item.tipo-elemento{ background: #fce4ec; color: #880e4f; }
-.equipo-ruta-sep {
-    color: #bbb;
-    font-size: 0.9em;
-    line-height: 1;
-}
+    .equipo-ruta-cell {
+        max-width: 220px;
+        font-size: 0.78em;
+        line-height: 1.6;
+        white-space: normal;
+    }
+
+    .equipo-ruta-path {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+    }
+
+    .equipo-ruta-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 1px 5px;
+        border-radius: 3px;
+        font-size: 0.85em;
+        font-weight: 500;
+        white-space: nowrap;
+    }
+
+    .equipo-ruta-item.tipo-planta {
+        background: #e8f5e9;
+        color: #2e7d32;
+    }
+
+    .equipo-ruta-item.tipo-zona {
+        background: #e3f2fd;
+        color: #1565c0;
+    }
+
+    .equipo-ruta-item.tipo-linea {
+        background: #fff3e0;
+        color: #e65100;
+    }
+
+    .equipo-ruta-item.tipo-maquina {
+        background: #f3e5f5;
+        color: #6a1b9a;
+    }
+
+    .equipo-ruta-item.tipo-elemento {
+        background: #fce4ec;
+        color: #880e4f;
+    }
+
+    .equipo-ruta-sep {
+        color: #bbb;
+        font-size: 0.9em;
+        line-height: 1;
+    }
+
+    /* ── Nueva OT: resaltado azul durante 30 s ── */
+    @keyframes nuevaOTFade {
+        0% {
+            box-shadow: inset 0 0 0 9999px rgba(59, 130, 246, 0.28);
+        }
+
+        70% {
+            box-shadow: inset 0 0 0 9999px rgba(59, 130, 246, 0.12);
+        }
+
+        100% {
+            box-shadow: inset 0 0 0 9999px rgba(59, 130, 246, 0);
+        }
+    }
+
+    .row-nueva-ot {
+        animation: nuevaOTFade 30s ease-out forwards;
+        border-left: 3px solid #3b82f6;
+    }
+
+    .dataTable tbody tr.row-nueva-ot:hover {
+        box-shadow: inset 0 0 0 9999px rgba(59, 130, 246, 0.22);
+    }
 </style>
 {% endblock %}
 
@@ -246,8 +293,14 @@
             filtered.forEach(o => {
                 const tipoInfo = getTipoInfo(o.tipo);
                 const rutaHtml = renderRutaEquipo(o.equipoRutaItems);
+                // Resaltar OTs recién creadas (ID registrado por guardarOT)
+                const esNueva = window._otNuevasIds && window._otNuevasIds.has(o.id);
+                if (window._otNuevasIds && window._otNuevasIds.size > 0) {
+                    console.log('[DEBUG] renderOrdenes - OT', o.id, 'esNueva:', esNueva, 'Set:', [...window._otNuevasIds]);
+                }
+                const claseNueva = esNueva ? ' row-nueva-ot' : '';
                 rowsHtml += `
-                <tr class="row-${o.estado}" onclick="verOrden(${o.id})" style="cursor: pointer;">
+                <tr class="row-${o.estado}${claseNueva}" onclick="verOrden(${o.id})" style="cursor: pointer;">
                     <td style="white-space: nowrap;"><span class="codigoTag">${o.numero}</span></td>
                     <td style="white-space: nowrap; text-align: center;"><span class="tipoIcono custom-tooltip" style="color: ${tipoInfo.color}; font-size: 1.2em;" data-tooltip="${tipoInfo.nombre}"><i class="fas ${tipoInfo.icono}"></i></span></td>
                     <td style="white-space: nowrap;"><span class="tag tag-${o.prioridad}">${o.prioridad}</span></td>

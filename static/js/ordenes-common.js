@@ -13,6 +13,9 @@ window.refreshOrdenesCallback = function () {
     console.log('Callback de refresco no definido');
 };
 
+// Set de IDs de OTs recién creadas (para resaltado visual temporal)
+window._otNuevasIds = new Set();
+
 function setRefreshCallback(callback) {
     window.refreshOrdenesCallback = callback;
 }
@@ -489,6 +492,10 @@ async function guardarOT(id) {
             showToast('Orden actualizada', 'success');
         } else {
             const result = await apiCall('/api/orden', 'POST', data);
+            // Marcar como nueva para resaltado visual
+            window._otNuevasIds.add(result.id);
+            console.log('[DEBUG] OT nueva creada, ID añadido al Set:', result.id, 'Set:', [...window._otNuevasIds]);
+            setTimeout(() => window._otNuevasIds.delete(result.id), 30000);
             showToast(`OT ${result.numero} creada`, 'success');
         }
         closeModal();
@@ -871,18 +878,20 @@ async function confirmarPausarTrabajo(ordenId) {
 async function agregarConsumoOT(ordenId) {
     const recambios = await apiCall('/api/recambios');
 
-    let options = '<option value="">Seleccionar recambio...</option>';
-    recambios.forEach(r => {
-        options += `<option value="${r.id}" data-stock="${r.stockActual}">${r.codigo} - ${r.nombre} (Stock: ${r.stockActual})</option>`;
-    });
-
     const html = `
     <form id="formConsumo" onsubmit="event.preventDefault(); return false;">
-        <div class="formGroup">
+        <div class="formGroup" style="position:relative;">
             <label>Recambio *</label>
-            <select id="consumoRecambio" class="formControl" required onchange="verificarStock()">
-                ${options}
-            </select>
+            <input type="text" id="consumoBusqueda" class="formControl" placeholder="Buscar por nombre o código..."
+                   autocomplete="off" oninput="filtrarRecambios()" onblur="setTimeout(()=>ocultarSugerencias(),200)">
+            <input type="hidden" id="consumoRecambioId">
+            <ul id="consumoSugerencias" style="
+                display:none; position:absolute; top:100%; left:0; right:0;
+                background:var(--cardBg,#1e2130); border:1px solid var(--border,#333);
+                border-radius:6px; max-height:200px; overflow-y:auto;
+                list-style:none; margin:2px 0 0; padding:0; z-index:9999;
+                box-shadow:0 4px 12px rgba(0,0,0,.3);
+            "></ul>
             <small id="stockInfo" class="textMuted"></small>
         </div>
         <div class="formGroup">
@@ -898,26 +907,62 @@ async function agregarConsumoOT(ordenId) {
 `;
 
     openModal('Añadir Consumo de Recambio', html, footer);
+
+    // Guardar lista de recambios en una variable accesible
+    window._recambiosCache = recambios;
 }
 
-function verificarStock() {
-    const select = document.getElementById('consumoRecambio');
-    const option = select.options[select.selectedIndex];
-    const stock = option.dataset.stock;
+function filtrarRecambios() {
+    const query = document.getElementById('consumoBusqueda').value.toLowerCase().trim();
+    const lista = document.getElementById('consumoSugerencias');
+    const recambios = window._recambiosCache || [];
 
-    if (stock) {
-        document.getElementById('stockInfo').textContent = `Stock disponible: ${stock}`;
-    } else {
-        document.getElementById('stockInfo').textContent = '';
-    }
+    // Limpiar selección previa al escribir
+    document.getElementById('consumoRecambioId').value = '';
+    document.getElementById('stockInfo').textContent = '';
+
+    if (!query) { lista.style.display = 'none'; return; }
+
+    const filtrados = recambios.filter(r =>
+        r.nombre.toLowerCase().includes(query) || (r.codigo && r.codigo.toLowerCase().includes(query))
+    ).slice(0, 20);
+
+    if (!filtrados.length) { lista.style.display = 'none'; return; }
+
+    lista.innerHTML = filtrados.map(r => `
+        <li onclick="seleccionarRecambio(${r.id}, '${(r.codigo + ' - ' + r.nombre).replace(/'/g, "\\'")}', ${r.stockActual})"
+            style="padding:8px 12px; cursor:pointer; border-bottom:1px solid var(--border,#333);"
+            onmouseover="this.style.background='rgba(255,255,255,.06)'"
+            onmouseout="this.style.background=''">
+            <span style="font-weight:600;">${r.codigo}</span> — ${r.nombre}
+            <span class="textMuted" style="float:right; font-size:.85em;">Stock: ${r.stockActual}</span>
+        </li>
+    `).join('');
+    lista.style.display = 'block';
+}
+
+function seleccionarRecambio(id, texto, stock) {
+    document.getElementById('consumoBusqueda').value = texto;
+    document.getElementById('consumoRecambioId').value = id;
+    document.getElementById('consumoSugerencias').style.display = 'none';
+    document.getElementById('stockInfo').textContent = `Stock disponible: ${stock}`;
+}
+
+function ocultarSugerencias() {
+    const lista = document.getElementById('consumoSugerencias');
+    if (lista) lista.style.display = 'none';
 }
 
 async function confirmarConsumo(ordenId) {
-    const recambioId = document.getElementById('consumoRecambio').value;
+    const recambioId = document.getElementById('consumoRecambioId').value;
     const cantidad = parseInt(document.getElementById('consumoCantidad').value);
 
-    if (!recambioId || !cantidad) {
-        showToast('Completa todos los campos', 'error');
+    if (!recambioId) {
+        showToast('Selecciona un recambio de la lista', 'error');
+        return;
+    }
+    if (!cantidad) {
+        showToast('Indica la cantidad', 'error');
         return;
     }
 
@@ -1033,6 +1078,13 @@ async function abrirSelectorArbol() {
     const modalActual = document.querySelector('.modalContent').innerHTML;
     window.modalAnterior = modalActual;
 
+    // Guardar los valores actuales de los campos del formulario (los selects pierden su valor al restaurar innerHTML)
+    // Excluir inputs hidden: los gestiona el árbol selector y no deben sobreescribirse
+    window.formSnapshot = {};
+    document.querySelectorAll('.modalContent select, .modalContent input:not([type="hidden"]), .modalContent textarea').forEach(el => {
+        if (el.id) window.formSnapshot[el.id] = el.value;
+    });
+
     // Mostrar modal de árbol
     document.querySelector('.modalContent').innerHTML = `
         <div class="modalHeader">
@@ -1069,6 +1121,13 @@ function cerrarSelectorArbol() {
     // Restaurar modal anterior
     if (window.modalAnterior) {
         document.querySelector('.modalContent').innerHTML = window.modalAnterior;
+        // Restaurar valores de los campos (innerHTML reset al atributo 'selected' original)
+        if (window.formSnapshot) {
+            Object.entries(window.formSnapshot).forEach(([id, val]) => {
+                const el = document.getElementById(id);
+                if (el) el.value = val;
+            });
+        }
     }
 }
 
