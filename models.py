@@ -282,14 +282,20 @@ class GamaMantenimiento(db.Model):
     codigo = db.Column(db.String(20), unique=True, nullable=False)
     nombre = db.Column(db.String(100), nullable=False)
     descripcion = db.Column(db.Text)
-    tipo = db.Column(db.String(20), default='preventivo') # 'preventivo' o 'tecnico_legal'
+    tipo = db.Column(db.String(20), default='preventivo')  # 'preventivo', 'tecnico_legal', 'calibracion', 'predictivo', 'conductivo'
     tiempoEstimado = db.Column(db.Integer)  # minutos totales
     activo = db.Column(db.Boolean, default=True)
     fechaCreacion = db.Column(db.Date, default=date.today)
     
     @classmethod
     def generarCodigo(cls, tipo):
-        prefijo = 'TL-' if tipo == 'tecnico_legal' else 'PR-'
+        PREFIJOS = {
+            'tecnico_legal': 'TL-',
+            'calibracion':   'CA-',
+            'predictivo':    'PD-',
+            'conductivo':    'CD-',
+        }
+        prefijo = PREFIJOS.get(tipo, 'PR-')
         
         # Buscar el último número usado para el prefijo correspondiente
         ultima_gama = cls.query.filter(cls.codigo.like(f'{prefijo}%')).order_by(db.desc(cls.codigo)).first()

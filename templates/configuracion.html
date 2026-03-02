@@ -510,6 +510,17 @@
     // GESTIÓN DE GAMAS (código reutilizado de gamas.html)
     // =========================================================================
 
+    const TIPOS_GAMA = {
+        'preventivo': { label: 'Preventivo', clase: 'tag-info' },
+        'tecnico_legal': { label: 'Técnico-Legal', clase: 'tag-warning' },
+        'calibracion': { label: 'Calibración', clase: 'tag-purple' },
+        'predictivo': { label: 'Predictivo', clase: 'tag-teal' },
+        'conductivo': { label: 'Conductivo', clase: 'tag-muted' },
+    };
+    function getTipoGamaTag(tipo) {
+        return TIPOS_GAMA[tipo] || { label: tipo, clase: 'tag-info' };
+    }
+
     let gamasData = [];
 
     async function cargarGamas() {
@@ -546,7 +557,7 @@
             html += `
             <tr onclick="verGama(${g.id})" style="cursor: pointer;">
                 <td><strong>${g.codigo}</strong></td>
-                <td><span class="tag ${g.tipo === 'tecnico_legal' ? 'tag-warning' : 'tag-info'}">${g.tipo === 'tecnico_legal' ? 'Técnico-Legal' : 'Preventivo'}</span></td>
+                <td><span class="tag ${getTipoGamaTag(g.tipo).clase}">${getTipoGamaTag(g.tipo).label}</span></td>
                 <td>${g.nombre}</td>
                 <td><span class="text-muted small">${g.descripcion || '-'}</span></td>
                 <td class="text-center"><span class="badge badge-info">${g.numTareas}</span></td>
@@ -583,8 +594,11 @@
                 <div class="formGroup">
                     <label>Tipo *</label>
                     <select id="gamaTipo" class="formControl" ${esEdicion ? 'disabled' : ''}>
-                        <option value="preventivo" ${gama && gama.tipo === 'tecnico_legal' ? '' : 'selected'}>Preventivo</option>
-                        <option value="tecnico_legal" ${gama && gama.tipo === 'tecnico_legal' ? 'selected' : ''}>Técnico-Legal</option>
+                        <option value="preventivo"      ${!gama || gama.tipo === 'preventivo' ? 'selected' : ''}>Preventivo</option>
+                        <option value="tecnico_legal"   ${gama && gama.tipo === 'tecnico_legal' ? 'selected' : ''}>Técnico-Legal</option>
+                        <option value="calibracion"     ${gama && gama.tipo === 'calibracion' ? 'selected' : ''}>Calibración</option>
+                        <option value="predictivo"      ${gama && gama.tipo === 'predictivo' ? 'selected' : ''}>Predictivo</option>
+                        <option value="conductivo"      ${gama && gama.tipo === 'conductivo' ? 'selected' : ''}>Conductivo</option>
                     </select>
                 </div>
                 <div class="formGroup">
@@ -667,7 +681,7 @@
                 </div>
                 <div class="infoItem">
                     <label>Tipo</label>
-                    <span class="tag ${g.tipo === 'tecnico_legal' ? 'tag-warning' : 'tag-info'}">${g.tipo === 'tecnico_legal' ? 'Técnico-Legal' : 'Preventivo'}</span>
+                    <span class="tag ${getTipoGamaTag(g.tipo).clase}">${getTipoGamaTag(g.tipo).label}</span>
                 </div>
                 <div class="infoItem">
                     <label>Estado</label>

@@ -790,6 +790,27 @@ h6 {
     color: var(--secondary);
 }
 
+.tag-info {
+    background-color: #e3f2fd;
+    color: #0277bd;
+}
+
+.tag-warning {
+    background-color: #fff3cd;
+    color: #856404;
+}
+
+.tag-purple {
+    background-color: #ede7f6;
+    color: #6a1b9a;
+}
+
+.tag-teal {
+    background-color: #e0f7fa;
+    color: #00695c;
+}
+
+
 .codigoTag {
     font-family: 'Consolas', monospace;
     background-color: var(--bg-light);
@@ -2235,13 +2256,15 @@ a.elemento-icon>.jstree-themeicon {
     margin: 0 0 10px 0;
     color: var(--danger);
 }
+
 /* Custom Tooltips for instant display */
 .custom-tooltip {
     position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    cursor: default; /* Remove the question mark cursor */
+    cursor: default;
+    /* Remove the question mark cursor */
 }
 
 .custom-tooltip::after {
@@ -2263,7 +2286,7 @@ a.elemento-icon>.jstree-themeicon {
     z-index: 100;
     pointer-events: none;
     margin-bottom: 5px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
 .custom-tooltip::before {
@@ -2314,6 +2337,7 @@ a.elemento-icon>.jstree-themeicon {
     align-items: center;
     gap: 1.5rem;
 }
+
 .headerUserInfo {
     display: flex;
     align-items: center;
@@ -2321,9 +2345,11 @@ a.elemento-icon>.jstree-themeicon {
     color: white;
     font-size: 0.95rem;
 }
+
 .headerUserName {
     font-weight: 500;
 }
+
 .btnLogout {
     background: rgba(255, 255, 255, 0.15);
     border: none;
@@ -2333,6 +2359,7 @@ a.elemento-icon>.jstree-themeicon {
     cursor: pointer;
     transition: background 0.2s;
 }
+
 .btnLogout:hover {
     background: rgba(255, 255, 255, 0.3);
 }
