@@ -33,6 +33,83 @@ def _get_equipo_info(equipo_tipo, equipo_id):
     return getattr(obj, 'codigo', ''), getattr(obj, 'nombre', '')
 
 
+def _get_ruta_jerarquica(equipo_tipo, equipo_id):
+    """
+    Devuelve un dict con los nombres de cada nivel de la jerarquía:
+      { 'planta': '', 'zona': '', 'linea': '', 'maquina': '', 'elemento': '' }
+    Rellena solo los niveles hasta el equipo de la OT; el resto queda en ''.
+    Jerarquía: Planta → Zona → Línea → Máquina → Elemento
+    """
+    ruta = {'planta': '', 'zona': '', 'linea': '', 'maquina': '', 'elemento': ''}
+    if not equipo_tipo or not equipo_id:
+        return ruta
+
+    try:
+        if equipo_tipo == 'elemento':
+            elem = Elemento.query.get(equipo_id)
+            if not elem:
+                return ruta
+            ruta['elemento'] = elem.nombre
+            maq = Maquina.query.get(elem.maquinaId)
+            if maq:
+                ruta['maquina'] = maq.nombre
+                linea = Linea.query.get(maq.lineaId)
+                if linea:
+                    ruta['linea'] = linea.nombre
+                    zona = Zona.query.get(linea.zonaId)
+                    if zona:
+                        ruta['zona'] = zona.nombre
+                        planta = Planta.query.get(zona.plantaId)
+                        if planta:
+                            ruta['planta'] = planta.nombre
+
+        elif equipo_tipo == 'maquina':
+            maq = Maquina.query.get(equipo_id)
+            if not maq:
+                return ruta
+            ruta['maquina'] = maq.nombre
+            linea = Linea.query.get(maq.lineaId)
+            if linea:
+                ruta['linea'] = linea.nombre
+                zona = Zona.query.get(linea.zonaId)
+                if zona:
+                    ruta['zona'] = zona.nombre
+                    planta = Planta.query.get(zona.plantaId)
+                    if planta:
+                        ruta['planta'] = planta.nombre
+
+        elif equipo_tipo == 'linea':
+            linea = Linea.query.get(equipo_id)
+            if not linea:
+                return ruta
+            ruta['linea'] = linea.nombre
+            zona = Zona.query.get(linea.zonaId)
+            if zona:
+                ruta['zona'] = zona.nombre
+                planta = Planta.query.get(zona.plantaId)
+                if planta:
+                    ruta['planta'] = planta.nombre
+
+        elif equipo_tipo == 'zona':
+            zona = Zona.query.get(equipo_id)
+            if not zona:
+                return ruta
+            ruta['zona'] = zona.nombre
+            planta = Planta.query.get(zona.plantaId)
+            if planta:
+                ruta['planta'] = planta.nombre
+
+        elif equipo_tipo == 'planta':
+            planta = Planta.query.get(equipo_id)
+            if planta:
+                ruta['planta'] = planta.nombre
+
+    except Exception:
+        pass
+
+    return ruta
+
+
 def _build_tecnicos_dict():
     """
     Construye un dict {nombre_completo: coste_hora} para lookup rápido.
@@ -236,6 +313,7 @@ def get_informe_ordenes(fecha_inicio, fecha_fin, tipo=None, estado=None, equipo_
         totales['coste_talleres'] += coste_ext
         totales['coste_total'] += coste_total
 
+        ruta = _get_ruta_jerarquica(o.equipoTipo, o.equipoId)
         rows.append({
             'numero': o.numero,
             'titulo': o.titulo or '',
@@ -244,6 +322,12 @@ def get_informe_ordenes(fecha_inicio, fecha_fin, tipo=None, estado=None, equipo_
             'fecha_fin': o.fechaFin.strftime('%d/%m/%Y') if o.fechaFin else '',
             'equipo_codigo': eq_codigo,
             'equipo_nombre': eq_nombre,
+            # Columnas de ubicación jerárquica (Planta → Zona → Línea → Máquina → Elemento)
+            'ub_planta': ruta['planta'],
+            'ub_zona': ruta['zona'],
+            'ub_linea': ruta['linea'],
+            'ub_maquina': ruta['maquina'],
+            'ub_elemento': ruta['elemento'],
             'tipo': o.tipo,
             'prioridad': o.prioridad,
             'estado': o.estado,
@@ -277,6 +361,7 @@ def exportar_ordenes_excel(rows, totales):
 
     cabeceras = [
         'Nº Orden', 'Título', 'Fecha Solicitud', 'Fecha Inicio', 'Fecha Fin',
+        'Planta', 'Zona', 'Línea', 'Máquina', 'Elemento',
         'Equipo Código', 'Equipo', 'Tipo', 'Prioridad', 'Estado',
         'Descripción Avería', 'Trabajos Realizados', 'Técnico',
         'Horas Intervención', 'Horas Paro',
@@ -284,6 +369,7 @@ def exportar_ordenes_excel(rows, totales):
     ]
     campos = [
         'numero', 'titulo', 'fecha_creacion', 'fecha_inicio', 'fecha_fin',
+        'ub_planta', 'ub_zona', 'ub_linea', 'ub_maquina', 'ub_elemento',
         'equipo_codigo', 'equipo_nombre', 'tipo', 'prioridad', 'estado',
         'descripcion_averia', 'trabajos_realizados', 'tecnico_asignado',
         'horas_intervencion', 'horas_paro',
@@ -308,8 +394,9 @@ def exportar_ordenes_excel(rows, totales):
     # Fila de totales
     total_row = len(rows) + 2
     ws.cell(row=total_row, column=1, value='TOTALES').font = Font(bold=True)
-    totales_cols = {14: 'horas_intervencion', 15: 'horas_paro',
-                    16: 'coste_recambios', 17: 'coste_talleres', 18: 'coste_total'}
+    # Columnas: 1-5 base, 6-10 ubicación, 11-12 equipo, 13-15 tipo/prio/estado, 16-18 textual, 19 tecnico, 20-21 horas, 22-24 costes
+    totales_cols = {20: 'horas_intervencion', 21: 'horas_paro',
+                    22: 'coste_recambios', 23: 'coste_talleres', 24: 'coste_total'}
     for col, key in totales_cols.items():
         cell = ws.cell(row=total_row, column=col, value=totales.get(key, 0))
         cell.font = Font(bold=True)

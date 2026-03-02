@@ -712,9 +712,19 @@ async function confirmarAsignacionOT(id) {
     }
 }
 
-function cerrarOT(id) {
-    // Cierre Definitivo (solo confirmación, la info ya está en el cerrado_parcial)
-    if (!confirm('¿Realizar el Cierre Definitivo de esta Orden de Trabajo?')) return;
+async function cerrarOT(id) {
+    // Comprobar si hay registros de tiempo activos antes de confirmar el cierre
+    let mensajeExtra = '';
+    try {
+        const tiempos = await apiCall(`/api/orden/${id}/tiempos`);
+        const activos = (tiempos.registros || []).filter(r => r.enCurso);
+        if (activos.length > 0) {
+            const nombres = activos.map(r => r.tecnico).join(', ');
+            mensajeExtra = `\n\n⚠️ ATENCIÓN: Hay ${activos.length} registro(s) de tiempo activo(s) para: ${nombres}.\nSe pararán automáticamente al confirmar el cierre.`;
+        }
+    } catch (e) { /* Si falla la consulta, continuar igualmente */ }
+
+    if (!confirm(`¿Realizar el Cierre Definitivo de esta Orden de Trabajo?${mensajeExtra}`)) return;
     confirmarCierreDefinitivo(id);
 }
 

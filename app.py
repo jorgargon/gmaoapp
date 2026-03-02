@@ -1505,6 +1505,23 @@ def cambiarEstadoOrden(id):
             
         # Registrar el tiempo de fin del trabajo
         orden.fechaFin = datetime.now()
+
+        # ── SEGURIDAD: cerrar registros de tiempo activos que el técnico no paró ──
+        registros_activos = RegistroTiempo.query.filter_by(ordenId=id, enCurso=True).all()
+        # Usar la fechaFin de la orden como fin del registro: el tiempo cuenta
+        # desde que el técnico empezó hasta que cerró la orden, no hasta ahora.
+        fin_sesion = orden.fechaFin
+        for reg in registros_activos:
+            reg.fin = fin_sesion
+            reg.enCurso = False
+        if registros_activos:
+            # Recalcular tiempoReal con todos los registros ya cerrados
+            tiempoTotal = db.session.query(func.sum(
+                func.julianday(RegistroTiempo.fin) - func.julianday(RegistroTiempo.inicio)
+            )).filter(RegistroTiempo.ordenId == id, RegistroTiempo.fin.isnot(None)).scalar()
+            if tiempoTotal:
+                orden.tiempoReal = round(tiempoTotal * 24, 2)
+            print(f'[AVISO] OT {orden.numero}: {len(registros_activos)} registro(s) de tiempo cerrado(s) automáticamente al finalizar.')
             
         # Si era correctivo, volver la máquina a operativo
         if orden.tipo == 'correctivo':
@@ -1523,6 +1540,23 @@ def cambiarEstadoOrden(id):
         if not orden.fechaFin:
             orden.fechaFin = datetime.now()
         orden.cerradoPor = data.get('cerradoPor', 'Sistema')
+
+        # ── SEGURIDAD: cerrar registros de tiempo activos que el técnico no paró ──
+        registros_activos = RegistroTiempo.query.filter_by(ordenId=id, enCurso=True).all()
+        # Usar la fechaFin de la orden como fin del registro: el tiempo cuenta
+        # desde que el técnico empezó hasta que cerró la orden, no hasta ahora.
+        fin_sesion = orden.fechaFin
+        for reg in registros_activos:
+            reg.fin = fin_sesion
+            reg.enCurso = False
+        if registros_activos:
+            # Recalcular tiempoReal con todos los registros ya cerrados
+            tiempoTotal = db.session.query(func.sum(
+                func.julianday(RegistroTiempo.fin) - func.julianday(RegistroTiempo.inicio)
+            )).filter(RegistroTiempo.ordenId == id, RegistroTiempo.fin.isnot(None)).scalar()
+            if tiempoTotal:
+                orden.tiempoReal = round(tiempoTotal * 24, 2)
+            print(f'[AVISO] OT {orden.numero}: {len(registros_activos)} registro(s) de tiempo cerrado(s) automáticamente al cerrar definitivamente.')
     
     # Validar que haya técnico asignado si se pone como 'asignada'
     if nuevoEstado == 'asignada' and not (orden.tecnicoAsignado and orden.tecnicoAsignado.strip()):

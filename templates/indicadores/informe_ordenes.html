@@ -2,30 +2,148 @@
 
 {% block head %}
 <style>
-    .badgeTipo { display:inline-block; padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:600; text-transform:uppercase; }
-    .tipo-correctivo { background:#FFEBEE; color:#C62828; }
-    .tipo-preventivo { background:#E8F5E9; color:#1B5E20; }
-    .tipo-mejora     { background:#E3F2FD; color:#0D47A1; }
-    .tipo-predictivo { background:#FFF3E0; color:#E65100; }
-    .badgeEstado { display:inline-block; padding:2px 8px; border-radius:12px; font-size:0.75rem; font-weight:600; }
-    .estado-pendiente  { background:#FFF9C4; color:#827717; }
-    .estado-asignada   { background:#E3F2FD; color:#1565C0; }
-    .estado-en_curso   { background:#FFF3E0; color:#E65100; }
-    .estado-cerrada    { background:#E8F5E9; color:#2E7D32; }
-    .estado-cancelada  { background:#FAFAFA; color:#9E9E9E; }
-    .badgePrioridad { display:inline-block; padding:2px 8px; border-radius:12px; font-size:0.72rem; font-weight:600; }
-    .prio-urgente { background:#FFEBEE; color:#B71C1C; }
-    .prio-alta    { background:#FFF3E0; color:#BF360C; }
-    .prio-media   { background:#E3F2FD; color:#0D47A1; }
-    .prio-baja    { background:#F3E5F5; color:#4A148C; }
-    .rowTotales   { background:#E3F2FD; font-weight:700; }
-    .infoPanel { display:flex; gap:1.5rem; flex-wrap:wrap; margin-bottom:1rem; }
-    .infoBox { background:#fff; border:1px solid #e0e0e0; border-radius:8px; padding:0.75rem 1.25rem; min-width:130px; text-align:center; }
-    .infoBox .val { font-size:1.4rem; font-weight:700; color:#1565C0; }
-    .infoBox .lbl { font-size:0.75rem; color:#666; margin-top:2px; }
-    .filterGroup { display:flex; align-items:center; gap:0.5rem; }
-    .filterGroup label { font-size:0.82rem; color:#555; white-space:nowrap; }
-    .filterGroup input, .filterGroup select { padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:0.85rem; }
+    .badgeTipo {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .tipo-correctivo {
+        background: #FFEBEE;
+        color: #C62828;
+    }
+
+    .tipo-preventivo {
+        background: #E8F5E9;
+        color: #1B5E20;
+    }
+
+    .tipo-mejora {
+        background: #E3F2FD;
+        color: #0D47A1;
+    }
+
+    .tipo-predictivo {
+        background: #FFF3E0;
+        color: #E65100;
+    }
+
+    .badgeEstado {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .estado-pendiente {
+        background: #FFF9C4;
+        color: #827717;
+    }
+
+    .estado-asignada {
+        background: #E3F2FD;
+        color: #1565C0;
+    }
+
+    .estado-en_curso {
+        background: #FFF3E0;
+        color: #E65100;
+    }
+
+    .estado-cerrada {
+        background: #E8F5E9;
+        color: #2E7D32;
+    }
+
+    .estado-cancelada {
+        background: #FAFAFA;
+        color: #9E9E9E;
+    }
+
+    .badgePrioridad {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.72rem;
+        font-weight: 600;
+    }
+
+    .prio-urgente {
+        background: #FFEBEE;
+        color: #B71C1C;
+    }
+
+    .prio-alta {
+        background: #FFF3E0;
+        color: #BF360C;
+    }
+
+    .prio-media {
+        background: #E3F2FD;
+        color: #0D47A1;
+    }
+
+    .prio-baja {
+        background: #F3E5F5;
+        color: #4A148C;
+    }
+
+    .rowTotales {
+        background: #E3F2FD;
+        font-weight: 700;
+    }
+
+    .infoPanel {
+        display: flex;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+
+    .infoBox {
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 0.75rem 1.25rem;
+        min-width: 130px;
+        text-align: center;
+    }
+
+    .infoBox .val {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #1565C0;
+    }
+
+    .infoBox .lbl {
+        font-size: 0.75rem;
+        color: #666;
+        margin-top: 2px;
+    }
+
+    .filterGroup {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .filterGroup label {
+        font-size: 0.82rem;
+        color: #555;
+        white-space: nowrap;
+    }
+
+    .filterGroup input,
+    .filterGroup select {
+        padding: 6px 10px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 0.85rem;
+    }
 </style>
 {% endblock %}
 
@@ -33,7 +151,8 @@
 <button class="btn btnPrimary btnSm" onclick="exportarExcel()" title="Exportar a Excel">
     <i class="fas fa-file-excel"></i> Excel
 </button>
-<a href="{{ url_for('indicadores.index') }}" class="btn btnSecondary btnSm" style="text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+<a href="{{ url_for('indicadores.index') }}" class="btn btnSecondary btnSm"
+    style="text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
     <i class="fas fa-arrow-left"></i> Volver
 </a>
 {% endblock %}
@@ -79,18 +198,38 @@
 
 <!-- Panel de resumen -->
 <div class="infoPanel" id="infoPanel" style="display:none;">
-    <div class="infoBox"><div class="val" id="sumOTs">-</div><div class="lbl">Órdenes</div></div>
-    <div class="infoBox"><div class="val" id="sumHoras">-</div><div class="lbl">Horas intervención</div></div>
-    <div class="infoBox"><div class="val" id="sumParo">-</div><div class="lbl">Horas paro</div></div>
-    <div class="infoBox"><div class="val" id="sumRec">-</div><div class="lbl">Coste recambios</div></div>
-    <div class="infoBox"><div class="val" id="sumTaller">-</div><div class="lbl">Coste talleres</div></div>
-    <div class="infoBox" style="border-color:#1565C0;"><div class="val" id="sumTotal" style="color:#1565C0;">-</div><div class="lbl">Coste total</div></div>
+    <div class="infoBox">
+        <div class="val" id="sumOTs">-</div>
+        <div class="lbl">Órdenes</div>
+    </div>
+    <div class="infoBox">
+        <div class="val" id="sumHoras">-</div>
+        <div class="lbl">Horas intervención</div>
+    </div>
+    <div class="infoBox">
+        <div class="val" id="sumParo">-</div>
+        <div class="lbl">Horas paro</div>
+    </div>
+    <div class="infoBox">
+        <div class="val" id="sumRec">-</div>
+        <div class="lbl">Coste recambios</div>
+    </div>
+    <div class="infoBox">
+        <div class="val" id="sumTaller">-</div>
+        <div class="lbl">Coste talleres</div>
+    </div>
+    <div class="infoBox" style="border-color:#1565C0;">
+        <div class="val" id="sumTotal" style="color:#1565C0;">-</div>
+        <div class="lbl">Coste total</div>
+    </div>
 </div>
 
 <!-- Buscador -->
 <div style="margin-bottom:0.5rem; display:flex; align-items:center; gap:0.5rem;">
     <i class="fas fa-search" style="color:#999;"></i>
-    <input type="text" id="buscar" placeholder="Buscar en resultados..." style="padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:0.85rem; width:260px;" oninput="filtrarTabla()">
+    <input type="text" id="buscar" placeholder="Buscar en resultados..."
+        style="padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:0.85rem; width:260px;"
+        oninput="filtrarTabla()">
     <span id="contadorFilas" style="font-size:0.8rem; color:#888;"></span>
 </div>
 
@@ -103,7 +242,11 @@
                 <th>Solicitud</th>
                 <th>Inicio</th>
                 <th>Fin</th>
-                <th>Equipo</th>
+                <th>Planta</th>
+                <th>Zona</th>
+                <th>Línea</th>
+                <th>Máquina</th>
+                <th>Elemento</th>
                 <th>Tipo</th>
                 <th>Prioridad</th>
                 <th>Estado</th>
@@ -134,19 +277,19 @@
     let _allRows = [];
 
     // Inicializar fechas: mes actual
-    (function() {
+    (function () {
         const hoy = new Date();
         const y = hoy.getFullYear(), m = String(hoy.getMonth() + 1).padStart(2, '0');
         document.getElementById('fInicio').value = `${y}-${m}-01`;
-        document.getElementById('fFin').value = `${y}-${m}-${String(new Date(y, hoy.getMonth()+1, 0).getDate()).padStart(2,'0')}`;
+        document.getElementById('fFin').value = `${y}-${m}-${String(new Date(y, hoy.getMonth() + 1, 0).getDate()).padStart(2, '0')}`;
     })();
 
     function cargar() {
         const params = new URLSearchParams({
             fecha_inicio: document.getElementById('fInicio').value,
-            fecha_fin:    document.getElementById('fFin').value,
-            tipo:         document.getElementById('fTipo').value,
-            estado:       document.getElementById('fEstado').value,
+            fecha_fin: document.getElementById('fFin').value,
+            tipo: document.getElementById('fTipo').value,
+            estado: document.getElementById('fEstado').value,
         });
 
         document.getElementById('loadingMsg').style.display = 'block';
@@ -190,10 +333,11 @@
                 <td>${esc(r.fecha_creacion)}</td>
                 <td>${esc(r.fecha_inicio)}</td>
                 <td>${esc(r.fecha_fin)}</td>
-                <td>
-                    <div style="font-size:0.8rem; color:#1565C0; font-weight:600;">${esc(r.equipo_codigo)}</div>
-                    <div style="font-size:0.82rem;">${esc(r.equipo_nombre)}</div>
-                </td>
+                <td>${esc(r.ub_planta)}</td>
+                <td>${esc(r.ub_zona)}</td>
+                <td>${esc(r.ub_linea)}</td>
+                <td style="font-size:0.82rem;">${esc(r.ub_maquina)}</td>
+                <td style="font-size:0.8rem; color:#666;">${esc(r.ub_elemento)}</td>
                 <td><span class="badgeTipo tipo-${esc(r.tipo)}">${esc(r.tipo)}</span></td>
                 <td><span class="badgePrioridad prio-${esc(r.prioridad)}">${esc(r.prioridad)}</span></td>
                 <td><span class="badgeEstado estado-${esc(r.estado)}">${esc(r.estado)}</span></td>
@@ -218,7 +362,7 @@
 
         tfoot.innerHTML = `
             <tr class="rowTotales">
-                <td colspan="9" style="text-align:right; padding-right:1rem;">TOTALES (${rows.length} órdenes)</td>
+                <td colspan="13" style="text-align:right; padding-right:1rem;">TOTALES (${rows.length} órdenes)</td>
                 <td style="text-align:right;">${fmt(tot.h)}</td>
                 <td style="text-align:right;">${fmt(tot.hp)}</td>
                 <td style="text-align:right;">${fmtEur(tot.rec)}</td>
@@ -253,15 +397,15 @@
     function exportarExcel() {
         const params = new URLSearchParams({
             fecha_inicio: document.getElementById('fInicio').value,
-            fecha_fin:    document.getElementById('fFin').value,
-            tipo:         document.getElementById('fTipo').value,
-            estado:       document.getElementById('fEstado').value,
+            fecha_fin: document.getElementById('fFin').value,
+            tipo: document.getElementById('fTipo').value,
+            estado: document.getElementById('fEstado').value,
         });
         window.location.href = `/informes/api/ordenes/excel?${params}`;
     }
 
-    function esc(s) { return s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-    function fmt(v) { return v == null ? '-' : parseFloat(v).toLocaleString('es-ES', {minimumFractionDigits:0, maximumFractionDigits:2}); }
-    function fmtEur(v) { return v == null ? '-' : parseFloat(v).toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €'; }
+    function esc(s) { return s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function fmt(v) { return v == null ? '-' : parseFloat(v).toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
+    function fmtEur(v) { return v == null ? '-' : parseFloat(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
 </script>
 {% endblock %}
