@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+    .badgeEstado {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .estado-pendiente {
+        background: #FFF9C4;
+        color: #827717;
+    }
+
+    .estado-cerrada {
+        background: #E8F5E9;
+        color: #2E7D32;
+    }
+
+    .estado-en_curso {
+        background: #FFF3E0;
+        color: #E65100;
+    }
+
+    .estado-asignada {
+        background: #E3F2FD;
+        color: #1565C0;
+    }
+
+    .estado-cancelada {
+        background: #F5F5F5;
+        color: #9E9E9E;
+    }
+
+    .badgeTipo {
+        display: inline-block;
+        padding: 2px 9px;
+        border-radius: 12px;
+        font-size: 0.72rem;
+        font-weight: 700;
+    }
+
+    .tipo-calibracion {
+        background: #EDE7F6;
+        color: #6A1B9A;
+    }
+
+    .tipo-tecnico_legal {
+        background: #FFF8E1;
+        color: #F57F17;
+    }
+
+    .infoPanel {
+        display: flex;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+    }
+
+    .infoBox {
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        padding: 0.75rem 1.25rem;
+        min-width: 130px;
+        text-align: center;
+    }
+
+    .infoBox .val {
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #1565C0;
+    }
+
+    .infoBox .lbl {
+        font-size: 0.75rem;
+        color: #666;
+        margin-top: 2px;
+    }
+
+    .filterGroup {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .filterGroup label {
+        font-size: 0.82rem;
+        color: #555;
+        white-space: nowrap;
+    }
+
+    .filterGroup input,
+    .filterGroup select {
+        padding: 6px 10px;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 0.85rem;
+    }
+</style>
+{% endblock %}
+
+{% block rightMenu %}
+<button class="btn btnPrimary btnSm" onclick="exportarExcel()" title="Exportar a Excel">
+    <i class="fas fa-file-excel"></i> Excel
+</button>
+<a href="{{ url_for('indicadores.index') }}" class="btn btnSecondary btnSm"
+    style="text-decoration:none; display:inline-flex; align-items:center; gap:4px;">
+    <i class="fas fa-arrow-left"></i> Volver
+</a>
+{% endblock %}
+
+{% block content %}
+<div class="pageHeader">
+    <h2><i class="fas fa-vials"></i> Informe de Calibraciones y Técnico-Legales</h2>
+</div>
+
+<!-- Filtros -->
+<div class="filtersBar" style="gap:1rem; align-items:flex-end; flex-wrap:wrap;">
+    <div class="filterGroup">
+        <label>Tipo</label>
+        <select id="fTipo" style="min-width:170px;">
+            <option value="">Todos (Cal. + TL)</option>
+            <option value="calibracion">Calibración</option>
+            <option value="tecnico_legal">Técnico-Legal</option>
+        </select>
+    </div>
+    <div class="filterGroup">
+        <label>Desde</label>
+        <input type="date" id="fDesde" />
+    </div>
+    <div class="filterGroup">
+        <label>Hasta</label>
+        <input type="date" id="fHasta" />
+    </div>
+    <div class="filterGroup">
+        <label>Estado</label>
+        <select id="fEstado">
+            <option value="">Todos</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="asignada">Asignada</option>
+            <option value="en_curso">En curso</option>
+            <option value="cerrada">Cerrada</option>
+            <option value="cancelada">Cancelada</option>
+        </select>
+    </div>
+    <button class="btn btnPrimary btnSm" onclick="cargar()"><i class="fas fa-search"></i> Consultar</button>
+</div>
+
+<!-- Panel de resumen -->
+<div class="infoPanel" id="infoPanel" style="display:none;">
+    <div class="infoBox">
+        <div class="val" id="sumTotal">-</div>
+        <div class="lbl">Total órdenes</div>
+    </div>
+    <div class="infoBox">
+        <div class="val" id="sumCerradas" style="color:#2E7D32;">-</div>
+        <div class="lbl">Cerradas</div>
+    </div>
+    <div class="infoBox">
+        <div class="val" id="sumPendientes" style="color:#E65100;">-</div>
+        <div class="lbl">En curso / pendientes</div>
+    </div>
+    <div class="infoBox">
+        <div class="val" id="sumHoras" style="color:#555;">-</div>
+        <div class="lbl">Horas intervención</div>
+    </div>
+    <div class="infoBox">
+        <div class="val" id="sumCoste" style="color:#1565C0;">-</div>
+        <div class="lbl">Coste total (€)</div>
+    </div>
+</div>
+
+<!-- Buscador -->
+<div style="display:flex; justify-content:flex-end; align-items:center; margin-bottom:0.5rem; gap:0.5rem;">
+    <i class="fas fa-search" style="color:#999;"></i>
+    <input type="text" id="buscar" placeholder="Buscar..."
+        style="padding:6px 10px; border:1px solid #ccc; border-radius:6px; font-size:0.85rem; width:220px;"
+        oninput="filtrarTabla()">
+    <span id="contadorFilas" style="font-size:0.8rem; color:#888;"></span>
+</div>
+
+<!-- Tabla -->
+<div class="tableContainer" style="overflow-x:auto;">
+    <table class="dataTable small" id="tablaInforme">
+        <thead>
+            <tr>
+                <th>Nº Orden</th>
+                <th>Tipo</th>
+                <th>Fecha Creación</th>
+                <th>Fecha Prog.</th>
+                <th>Fecha Fin</th>
+                <th>Equipo</th>
+                <th>Gama</th>
+                <th>Estado</th>
+                <th>Técnico</th>
+                <th style="text-align:right;">H. Intervención</th>
+                <th style="text-align:right;">Coste Total (€)</th>
+            </tr>
+        </thead>
+        <tbody id="tablaBody"></tbody>
+    </table>
+    <div id="noData" style="display:none; text-align:center; padding:3rem; color:#999;">
+        <i class="fas fa-inbox" style="font-size:2rem; margin-bottom:0.5rem; display:block;"></i>
+        No hay órdenes para los filtros seleccionados.
+    </div>
+    <div id="loadingMsg" style="display:none; text-align:center; padding:3rem; color:#999;">
+        <i class="fas fa-spinner fa-spin" style="font-size:1.5rem;"></i> Cargando...
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let _allRows = [];
+
+    // Inicializar: año en curso
+    (function () {
+        const hoy = new Date();
+        document.getElementById('fDesde').value = `${hoy.getFullYear()}-01-01`;
+        document.getElementById('fHasta').value = hoy.toISOString().split('T')[0];
+    })();
+
+    function _buildParams() {
+        const params = new URLSearchParams();
+        const tipo = document.getElementById('fTipo').value;
+        if (tipo) {
+            params.append('tipo', tipo);
+        } else {
+            params.append('tipo', 'calibracion');
+            params.append('tipo', 'tecnico_legal');
+        }
+        const desde = document.getElementById('fDesde').value;
+        const hasta = document.getElementById('fHasta').value;
+        const estado = document.getElementById('fEstado').value;
+        if (desde) params.set('fecha_inicio', desde);
+        if (hasta) params.set('fecha_fin', hasta);
+        if (estado) params.set('estado', estado);
+        return params;
+    }
+
+    async function cargar() {
+        const params = _buildParams();
+        document.getElementById('loadingMsg').style.display = 'block';
+        document.getElementById('noData').style.display = 'none';
+        document.getElementById('tablaBody').innerHTML = '';
+        document.getElementById('infoPanel').style.display = 'none';
+
+        try {
+            const data = await apiCall(`/informes/api/calibraciones-tl?${params}`);
+            document.getElementById('loadingMsg').style.display = 'none';
+            _allRows = data.rows || [];
+            renderizarTabla(_allRows);
+
+            const t = data.totales || {};
+            document.getElementById('sumTotal').textContent = t.total || 0;
+            document.getElementById('sumCerradas').textContent = t.cerradas || 0;
+            document.getElementById('sumPendientes').textContent = t.pendientes || 0;
+            document.getElementById('sumHoras').textContent = (t.horas_intervencion || 0).toLocaleString('es-ES', { maximumFractionDigits: 1 }) + ' h';
+            document.getElementById('sumCoste').textContent = (t.coste_total || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+            document.getElementById('infoPanel').style.display = 'flex';
+        } catch (err) {
+            document.getElementById('loadingMsg').style.display = 'none';
+            showToast('Error al cargar datos: ' + err.message, 'error');
+        }
+    }
+
+    const TIPO_LABEL = {
+        'calibracion': 'Calibración',
+        'tecnico_legal': 'Técnico-Legal',
+    };
+
+    function renderizarTabla(rows) {
+        const tbody = document.getElementById('tablaBody');
+        const noData = document.getElementById('noData');
+
+        if (!rows.length) {
+            tbody.innerHTML = '';
+            noData.style.display = 'block';
+            document.getElementById('contadorFilas').textContent = '0 resultados';
+            return;
+        }
+        noData.style.display = 'none';
+        document.getElementById('contadorFilas').textContent = `${rows.length} resultados`;
+
+        tbody.innerHTML = rows.map(r => {
+            const estadoCls = 'estado-' + (r.estado || 'pendiente').replace('_', '-');
+            const tipoCls = 'tipo-' + (r.tipo_gama || '');
+            const tipoLabel = TIPO_LABEL[r.tipo_gama] || esc(r.tipo_gama_label);
+            return `
+            <tr>
+                <td><strong>${esc(r.numero)}</strong></td>
+                <td><span class="badgeTipo ${tipoCls}">${tipoLabel}</span></td>
+                <td>${esc(r.fecha_creacion)}</td>
+                <td>${esc(r.fecha_programada)}</td>
+                <td>${esc(r.fecha_fin)}</td>
+                <td>
+                    <div style="font-size:0.8rem; color:#1565C0; font-weight:600;">${esc(r.equipo_codigo)}</div>
+                    <div style="font-size:0.82rem;">${esc(r.equipo_nombre)}</div>
+                </td>
+                <td>
+                    <div style="font-weight:600; font-size:0.82rem;">${esc(r.gama_codigo)}</div>
+                    <div style="font-size:0.8rem; color:#555;">${esc(r.gama_nombre)}</div>
+                </td>
+                <td><span class="badgeEstado ${estadoCls}">${esc(r.estado)}</span></td>
+                <td style="font-size:0.82rem;">${esc(r.tecnico_asignado)}</td>
+                <td style="text-align:right;">${r.horas_intervencion > 0 ? r.horas_intervencion.toLocaleString('es-ES', { maximumFractionDigits: 1 }) + ' h' : '-'}</td>
+                <td style="text-align:right;">${r.coste_total > 0 ? r.coste_total.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €' : '-'}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function filtrarTabla() {
+        const q = document.getElementById('buscar').value.trim().toLowerCase();
+        if (!q) { renderizarTabla(_allRows); return; }
+        const filtered = _allRows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(q)));
+        renderizarTabla(filtered);
+    }
+
+    function exportarExcel() {
+        const params = _buildParams();
+        window.location.href = `/informes/api/calibraciones-tl/excel?${params}`;
+    }
+
+    function esc(s) { return s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+</script>
+{% endblock %}

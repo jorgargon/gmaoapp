@@ -183,6 +183,56 @@ def api_movimientos_excel():
 
 
 # =============================================================================
+# API: INFORME CALIBRACIONES Y TÉCNICO-LEGALES
+# =============================================================================
+
+@bp.route('/calibraciones-tl')
+@responsable_required
+def informe_calibraciones_tl():
+    return render_template('indicadores/informe_calibraciones_tl.html')
+
+
+@bp.route('/api/calibraciones-tl')
+@responsable_required
+def api_calibraciones_tl():
+    fi = services._parse_fecha(request.args.get('fecha_inicio'))
+    ff = services._parse_fecha(request.args.get('fecha_fin'))
+    estado = request.args.get('estado') or None
+    equipo_id = request.args.get('equipo_id') or None
+
+    # tipos_gama puede ser multi-valor: ?tipo=calibracion&tipo=tecnico_legal
+    tipos_gama = request.args.getlist('tipo') or None
+
+    rows, totales = services.get_informe_gamas_especiales(fi, ff, tipos_gama, estado, equipo_id)
+    return jsonify({'rows': rows, 'totales': totales, 'total': len(rows)})
+
+
+@bp.route('/api/calibraciones-tl/excel')
+@responsable_required
+def api_calibraciones_tl_excel():
+    try:
+        import openpyxl  # noqa: F401
+    except ImportError:
+        return jsonify({'error': 'Instala openpyxl: pip install openpyxl'}), 500
+
+    fi = services._parse_fecha(request.args.get('fecha_inicio'))
+    ff = services._parse_fecha(request.args.get('fecha_fin'))
+    estado = request.args.get('estado') or None
+    equipo_id = request.args.get('equipo_id') or None
+    tipos_gama = request.args.getlist('tipo') or None
+
+    rows, totales = services.get_informe_gamas_especiales(fi, ff, tipos_gama, estado, equipo_id)
+    buf = services.exportar_gamas_especiales_excel(rows, totales, tipos_gama)
+
+    return send_file(
+        buf,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='informe_calibraciones_tl.xlsx',
+    )
+
+
+# =============================================================================
 # API: INDICADORES KPI
 # =============================================================================
 

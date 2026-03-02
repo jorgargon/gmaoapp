@@ -568,6 +568,170 @@ def exportar_preventivos_excel(rows):
 
 
 # =============================================================================
+# INFORME DE CALIBRACIONES Y TÉCNICO-LEGALES
+# =============================================================================
+
+_ETIQUETA_TIPO_GAMA = {
+    'calibracion':   'Calibración',
+    'tecnico_legal': 'Técnico-Legal',
+    'preventivo':    'Preventivo',
+    'predictivo':    'Predictivo',
+    'conductivo':    'Conductivo',
+}
+
+
+def get_informe_gamas_especiales(fecha_inicio, fecha_fin, tipos_gama=None, estado=None, equipo_id=None):
+    """
+    Devuelve (rows, totales) con OTs de gamas especiales en el período indicado.
+    tipos_gama: lista de strings, p.ej. ['calibracion', 'tecnico_legal'].
+    """
+    if not tipos_gama:
+        tipos_gama = ['calibracion', 'tecnico_legal']
+
+    tecnicos_dict = _build_tecnicos_dict()
+    coste_defecto = _coste_hora_defecto()
+
+    gama_ids = [
+        g.id for g in GamaMantenimiento.query.filter(
+            GamaMantenimiento.tipo.in_(tipos_gama),
+            GamaMantenimiento.activo == True,
+        ).all()
+    ]
+
+    q = OrdenTrabajo.query.filter(OrdenTrabajo.gamaId.in_(gama_ids)) if gama_ids else OrdenTrabajo.query.filter(False)
+
+    if fecha_inicio:
+        fi = datetime.combine(fecha_inicio, datetime.min.time())
+        q = q.filter(OrdenTrabajo.fechaCreacion >= fi)
+    if fecha_fin:
+        ff = datetime.combine(fecha_fin, datetime.max.time())
+        q = q.filter(OrdenTrabajo.fechaCreacion <= ff)
+    if estado:
+        q = q.filter(OrdenTrabajo.estado == estado)
+    if equipo_id:
+        q = q.filter(OrdenTrabajo.equipoId == int(equipo_id))
+
+    ordenes = q.order_by(OrdenTrabajo.fechaCreacion.desc()).all()
+
+    rows = []
+    totales = {'total': 0, 'cerradas': 0, 'pendientes': 0,
+               'horas_intervencion': 0.0, 'coste_total': 0.0}
+
+    for o in ordenes:
+        eq_codigo, eq_nombre = _get_equipo_info(o.equipoTipo, o.equipoId)
+        horas, coste_mo = _horas_y_coste_mo(o, tecnicos_dict, coste_defecto)
+        coste_rec = _coste_recambios_orden(o)
+        coste_ext = o.costeTallerExterno or 0.0
+        coste_total_ot = coste_mo + coste_rec + coste_ext
+
+        gama = o.gama
+        tipo_gama = gama.tipo if gama else ''
+
+        totales['total'] += 1
+        totales['horas_intervencion'] += horas
+        totales['coste_total'] += coste_total_ot
+        if o.estado == 'cerrada':
+            totales['cerradas'] += 1
+        elif o.estado in ('pendiente', 'asignada', 'en_curso'):
+            totales['pendientes'] += 1
+
+        rows.append({
+            'numero': o.numero,
+            'titulo': o.titulo or '',
+            'fecha_creacion': o.fechaCreacion.strftime('%d/%m/%Y') if o.fechaCreacion else '',
+            'fecha_programada': o.fechaProgramada.strftime('%d/%m/%Y') if o.fechaProgramada else '',
+            'fecha_fin': o.fechaFin.strftime('%d/%m/%Y') if o.fechaFin else '',
+            'equipo_codigo': eq_codigo,
+            'equipo_nombre': eq_nombre,
+            'gama_codigo': gama.codigo if gama else '',
+            'gama_nombre': gama.nombre if gama else '',
+            'tipo_gama': tipo_gama,
+            'tipo_gama_label': _ETIQUETA_TIPO_GAMA.get(tipo_gama, tipo_gama),
+            'estado': o.estado,
+            'prioridad': o.prioridad,
+            'tecnico_asignado': o.tecnicoAsignado or '',
+            'horas_intervencion': round(horas, 2),
+            'coste_recambios': round(coste_rec, 2),
+            'coste_talleres': round(coste_ext, 2),
+            'coste_total': round(coste_total_ot, 2),
+            'observaciones': o.descripcionSolucion or '',
+        })
+
+    totales['horas_intervencion'] = round(totales['horas_intervencion'], 2)
+    totales['coste_total'] = round(totales['coste_total'], 2)
+    return rows, totales
+
+
+def exportar_gamas_especiales_excel(rows, totales, tipos_gama=None):
+    """Genera BytesIO con el Excel del informe de calibraciones y técnico-legales."""
+    import io
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Calibraciones y Tec.Legal'
+
+    cabeceras = [
+        'Nº Orden', 'Título', 'Tipo Gama', 'Gama Código', 'Gama',
+        'Equipo Código', 'Equipo',
+        'Fecha Creación', 'Fecha Programada', 'Fecha Fin',
+        'Estado', 'Prioridad', 'Técnico',
+        'Horas Intervención', 'Coste Recambios (€)', 'Coste Talleres (€)', 'Coste Total (€)',
+        'Trabajos Realizados',
+    ]
+    campos = [
+        'numero', 'titulo', 'tipo_gama_label', 'gama_codigo', 'gama_nombre',
+        'equipo_codigo', 'equipo_nombre',
+        'fecha_creacion', 'fecha_programada', 'fecha_fin',
+        'estado', 'prioridad', 'tecnico_asignado',
+        'horas_intervencion', 'coste_recambios', 'coste_talleres', 'coste_total',
+        'observaciones',
+    ]
+
+    FILL_TIPOS = {
+        'calibracion':   PatternFill(start_color='EDE7F6', end_color='EDE7F6', fill_type='solid'),
+        'tecnico_legal': PatternFill(start_color='FFF8E1', end_color='FFF8E1', fill_type='solid'),
+    }
+    header_fill = PatternFill(start_color='1565C0', end_color='1565C0', fill_type='solid')
+    header_font = Font(bold=True, color='FFFFFF', size=10)
+    total_fill  = PatternFill(start_color='E3F2FD', end_color='E3F2FD', fill_type='solid')
+
+    ws.row_dimensions[1].height = 28
+    for col_idx, cab in enumerate(cabeceras, 1):
+        cell = ws.cell(row=1, column=col_idx, value=cab)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    for row_idx, row in enumerate(rows, 2):
+        row_fill = FILL_TIPOS.get(row.get('tipo_gama'))
+        for col_idx, campo in enumerate(campos, 1):
+            cell = ws.cell(row=row_idx, column=col_idx, value=row.get(campo, ''))
+            if row_fill:
+                cell.fill = row_fill
+
+    total_row = len(rows) + 2
+    ws.cell(row=total_row, column=1, value='TOTALES').font = Font(bold=True)
+    totales_cols = {14: 'horas_intervencion', 15: 'coste_recambios',
+                    16: 'coste_talleres', 17: 'coste_total'}
+    for col, key in totales_cols.items():
+        cell = ws.cell(row=total_row, column=col, value=totales.get(key, 0))
+        cell.font = Font(bold=True)
+        cell.fill = total_fill
+
+    for col in ws.columns:
+        max_len = max((len(str(c.value)) if c.value else 0) for c in col)
+        ws.column_dimensions[get_column_letter(col[0].column)].width = min(max_len + 2, 45)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf
+
+
+# =============================================================================
 # INFORME DE MOVIMIENTOS DE STOCK
 # =============================================================================
 
