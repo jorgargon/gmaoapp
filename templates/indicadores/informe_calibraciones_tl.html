@@ -259,8 +259,8 @@
             document.getElementById('sumTotal').textContent = t.total || 0;
             document.getElementById('sumCerradas').textContent = t.cerradas || 0;
             document.getElementById('sumPendientes').textContent = t.pendientes || 0;
-            document.getElementById('sumHoras').textContent = (t.horas_intervencion || 0).toLocaleString('es-ES', { maximumFractionDigits: 1 }) + ' h';
-            document.getElementById('sumCoste').textContent = (t.coste_total || 0).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €';
+            document.getElementById('sumHoras').textContent = fmtH(t.horas_intervencion || 0);
+            document.getElementById('sumCoste').textContent = fmtEur(t.coste_total || 0);
             document.getElementById('infoPanel').style.display = 'flex';
         } catch (err) {
             document.getElementById('loadingMsg').style.display = 'none';
@@ -307,8 +307,8 @@
                 </td>
                 <td><span class="badgeEstado ${estadoCls}">${esc(r.estado)}</span></td>
                 <td style="font-size:0.82rem;">${esc(r.tecnico_asignado)}</td>
-                <td style="text-align:right;">${r.horas_intervencion > 0 ? r.horas_intervencion.toLocaleString('es-ES', { maximumFractionDigits: 1 }) + ' h' : '-'}</td>
-                <td style="text-align:right;">${r.coste_total > 0 ? r.coste_total.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €' : '-'}</td>
+                <td style="text-align:right;">${r.horas_intervencion > 0 ? fmtH(r.horas_intervencion) : '-'}</td>
+                <td style="text-align:right;">${r.coste_total > 0 ? fmtEur(r.coste_total) : '-'}</td>
             </tr>`;
         }).join('');
     }
@@ -326,5 +326,14 @@
     }
 
     function esc(s) { return s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function _esNum(n, dec) {
+        if (n == null || isNaN(parseFloat(n))) return null;
+        const f = parseFloat(n).toFixed(dec ?? 0);
+        const [i, d] = f.split('.');
+        const iStr = i.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        return dec > 0 ? iStr + ',' + d : iStr;
+    }
+    function fmtH(v) { return (_esNum(v, 1) ?? '0') + ' h'; }
+    function fmtEur(v) { return v == null ? '-' : (_esNum(v, 2) ?? '-') + ' €'; }
 </script>
 {% endblock %}

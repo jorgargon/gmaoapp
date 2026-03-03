@@ -150,11 +150,11 @@
         function formatoEspanol(num, maxDecimals = 2) {
             if (num === null || num === undefined || num === '') return '-';
             const val = parseFloat(num);
-            if (isNaN(val)) return num;
-            return val.toLocaleString('es-ES', {
-                minimumFractionDigits: 0,
-                maximumFractionDigits: maxDecimals
-            });
+            if (isNaN(val)) return String(num);
+            const f = val.toFixed(maxDecimals);
+            const [i, d] = f.split('.');
+            const iStr = i.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            return maxDecimals > 0 ? iStr + ',' + d : iStr;
         }
 
         // Sistema de modales

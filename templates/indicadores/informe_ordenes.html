@@ -405,7 +405,14 @@
     }
 
     function esc(s) { return s == null ? '' : String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-    function fmt(v) { return v == null ? '-' : parseFloat(v).toLocaleString('es-ES', { minimumFractionDigits: 0, maximumFractionDigits: 2 }); }
-    function fmtEur(v) { return v == null ? '-' : parseFloat(v).toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' €'; }
+    function _esNum(n, dec) {
+        if (n == null || isNaN(parseFloat(n))) return null;
+        const f = parseFloat(n).toFixed(dec ?? 0);
+        const [i, d] = f.split('.');
+        const iStr = i.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        return dec > 0 ? iStr + ',' + d : iStr;
+    }
+    function fmt(v) { return _esNum(v, 2) ?? '-'; }
+    function fmtEur(v) { return v == null ? '-' : (_esNum(v, 2) ?? '-') + ' €'; }
 </script>
 {% endblock %}

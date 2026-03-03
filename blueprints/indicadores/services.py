@@ -1055,33 +1055,75 @@ def calcular_indicadores(fecha_inicio, fecha_fin, nivel=None, nivel_id=None):
         'economicos': {
             'E1': {
                 'valor': _fmt(e1), 'unidad': '%', 'nombre': 'Coste Mtto / RAV (E1)',
+                'referencia': 'Óptimo < 2% anual · Revisar estrategia > 6% · Considerar reposición del activo > 10–15%',
                 **({'nd': True, 'nota': 'Sin RAV definido en los equipos del scope'} if e1 is None else {}),
             },
-            'E6': {'valor': _fmt(e6), 'unidad': '%', 'nombre': '% Coste correctivo (E6)'},
-            'E7': {'valor': _fmt(e7), 'unidad': '%', 'nombre': '% Coste preventivo (E7)'},
-            'E13': {'valor': _fmt(e13), 'unidad': '%', 'nombre': '% Coste materiales (E13)'},
+            'E6': {
+                'valor': _fmt(e6), 'unidad': '%', 'nombre': '% Coste correctivo (E6)',
+                'referencia': 'Objetivo < 30% · Gestión reactiva si > 60%',
+            },
+            'E7': {
+                'valor': _fmt(e7), 'unidad': '%', 'nombre': '% Coste preventivo (E7)',
+                'referencia': 'Objetivo > 60% (estrategia preventiva consolidada)',
+            },
+            'E13': {
+                'valor': _fmt(e13), 'unidad': '%', 'nombre': '% Coste materiales (E13)',
+                'referencia': 'Equilibrio típico 40–60% · Muy alto indica exceso de recambios',
+            },
             'E14': {
                 'valor': _fmt(e14), 'unidad': '%', 'nombre': 'Stock / RAV (E14)',
+                'referencia': 'Objetivo 0,5–2% del RAV · Sobreinversión en stock > 3%',
                 **({'nd': True, 'nota': 'Sin RAV definido en los equipos del scope'} if e14 is None else {}),
             },
         },
         'tecnicos': {
-            'T1': {'valor': _fmt(t1), 'unidad': '%', 'nombre': 'Disponibilidad (T1)'},
-            'T3': {'valor': _fmt(t3, 2), 'unidad': 'h', 'nombre': 'MTBF (T3)'},
-            'T4': {'valor': _fmt(t4, 2), 'unidad': 'h', 'nombre': 'MTTR (T4)'},
-            'T8': {'valor': _fmt(t8), 'unidad': '%', 'nombre': '% Horas preventivo (T8)'},
-            'T9': {'valor': _fmt(t9), 'unidad': '%', 'nombre': '% Horas correctivo (T9)'},
-            'T12': {'valor': _fmt(t12), 'unidad': '%', 'nombre': 'Cumpl. preventivo (T12)'},
+            'T1': {
+                'valor': _fmt(t1), 'unidad': '%', 'nombre': 'Disponibilidad (T1)',
+                'referencia': 'Objetivo > 95% en críticos · Problema si < 90%',
+            },
+            'T3': {
+                'valor': _fmt(t3, 2), 'unidad': 'h', 'nombre': 'MTBF (T3)',
+                'referencia': 'Tendencia creciente indica mejora de fiabilidad',
+            },
+            'T4': {
+                'valor': _fmt(t4, 2), 'unidad': 'h', 'nombre': 'MTTR (T4)',
+                'referencia': 'Objetivo < 4 h en críticos · < 24 h en no críticos',
+            },
+            'T8': {
+                'valor': _fmt(t8), 'unidad': '%', 'nombre': '% Horas preventivo (T8)',
+                'referencia': 'Objetivo 60–80% · Buena práctica industrial',
+            },
+            'T9': {
+                'valor': _fmt(t9), 'unidad': '%', 'nombre': '% Horas correctivo (T9)',
+                'referencia': 'Objetivo < 20% · Problema si > 30%',
+            },
+            'T12': {
+                'valor': _fmt(t12), 'unidad': '%', 'nombre': 'Cumpl. preventivo (T12)',
+                'referencia': 'Objetivo > 90% · Mínimo aceptable 80%',
+            },
         },
         'organizativos': {
             'O1': {
                 'valor': None, 'unidad': '%', 'nombre': '% Personal interno (O1)',
-                'nd': True, 'nota': 'Requiere campo "tipo_contrato" en técnicos'
+                'nd': True, 'nota': 'Requiere campo "tipo_contrato" en técnicos',
+                'referencia': 'Referencia sector: 60–80% personal propio',
             },
-            'O10': {'valor': _fmt(o10), 'unidad': '%', 'nombre': '% OTs planificadas (O10)'},
-            'O12': {'valor': _fmt(o12), 'unidad': '%', 'nombre': 'Cumpl. programa (O12)'},
-            'O15': {'valor': _fmt(o15), 'unidad': '%', 'nombre': 'Utilización personal (O15)'},
-            'O18': {'valor': _fmt(o18), 'unidad': '%', 'nombre': 'Calidad de datos (O18)'},
+            'O10': {
+                'valor': _fmt(o10), 'unidad': '%', 'nombre': '% OTs planificadas (O10)',
+                'referencia': 'Objetivo > 70% · Organización reactiva si < 40%',
+            },
+            'O12': {
+                'valor': _fmt(o12), 'unidad': '%', 'nombre': 'Cumpl. programa (O12)',
+                'referencia': 'Objetivo > 80% · Revisar planificación si < 60%',
+            },
+            'O15': {
+                'valor': _fmt(o15), 'unidad': '%', 'nombre': 'Utilización personal (O15)',
+                'referencia': 'Óptimo 70–85% · Sobreutilización si > 90%',
+            },
+            'O18': {
+                'valor': _fmt(o18), 'unidad': '%', 'nombre': 'Calidad de datos (O18)',
+                'referencia': 'Objetivo > 90% · Mínimo aceptable 80%',
+            },
         },
         'resumen': {
             'total_ordenes': len(ordenes),

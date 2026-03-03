@@ -133,7 +133,7 @@
                 document.getElementById('sumTotal').textContent = res.total_planificados || 0;
                 document.getElementById('sumConOt').textContent = res.con_ot || 0;
                 document.getElementById('sumPendiente').textContent = res.pendientes || 0;
-                document.getElementById('sumHoras').textContent = (res.total_horas_previstas || 0).toLocaleString('es-ES', {maximumFractionDigits:1}) + ' h';
+                document.getElementById('sumHoras').textContent = fmtH(res.total_horas_previstas || 0);
                 document.getElementById('infoPanel').style.display = 'flex';
             })
             .catch(err => {
@@ -171,7 +171,7 @@
                         <div style="font-size:0.8rem; color:#555;">${esc(r.gama_nombre)}</div>
                     </td>
                     <td style="font-size:0.8rem;">${esc(r.frecuencia)}</td>
-                    <td style="text-align:right;">${r.horas_previstas > 0 ? r.horas_previstas.toLocaleString('es-ES', {maximumFractionDigits:1}) + ' h' : '-'}</td>
+                    <td style="text-align:right;">${r.horas_previstas > 0 ? fmtH(r.horas_previstas) : '-'}</td>
                     <td style="font-size:0.78rem; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(r.tareas)}">${esc(r.tareas) || '-'}</td>
                     <td style="font-size:0.78rem; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${esc(r.recambios_necesarios)}">${esc(r.recambios_necesarios) || '-'}</td>
                     <td style="font-size:0.8rem;">${esc(r.ultimo_preventivo)}</td>
@@ -197,5 +197,13 @@
     }
 
     function esc(s) { return s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function _esNum(n, dec) {
+        if (n == null || isNaN(parseFloat(n))) return null;
+        const f = parseFloat(n).toFixed(dec ?? 0);
+        const [i, d] = f.split('.');
+        const iStr = i.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        return dec > 0 ? iStr + ',' + d : iStr;
+    }
+    function fmtH(v) { return (_esNum(v, 1) ?? '0') + ' h'; }
 </script>
 {% endblock %}

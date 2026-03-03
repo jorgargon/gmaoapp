@@ -147,8 +147,8 @@
                 _allRows = data.rows || [];
                 renderizarTabla(_allRows);
                 const t = data.totales || {};
-                document.getElementById('sumEntUds').textContent = (t.entradas_uds || 0).toLocaleString('es-ES');
-                document.getElementById('sumSalUds').textContent = (t.salidas_uds || 0).toLocaleString('es-ES');
+                document.getElementById('sumEntUds').textContent = _esNum(t.entradas_uds || 0, 0) ?? '0';
+                document.getElementById('sumSalUds').textContent = _esNum(t.salidas_uds || 0, 0) ?? '0';
                 document.getElementById('sumEntCost').textContent = fmtEur(t.coste_entradas || 0);
                 document.getElementById('sumSalCost').textContent = fmtEur(t.coste_salidas || 0);
                 document.getElementById('sumMovs').textContent = _allRows.length;
@@ -213,6 +213,13 @@
     }
 
     function esc(s) { return s == null ? '' : String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-    function fmtEur(v) { return v == null ? '-' : parseFloat(v).toLocaleString('es-ES', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €'; }
+    function _esNum(n, dec) {
+        if (n == null || isNaN(parseFloat(n))) return null;
+        const f = parseFloat(n).toFixed(dec ?? 0);
+        const [i, d] = f.split('.');
+        const iStr = i.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        return dec > 0 ? iStr + ',' + d : iStr;
+    }
+    function fmtEur(v) { return v == null ? '-' : (_esNum(v, 2) ?? '-') + ' €'; }
 </script>
 {% endblock %}
