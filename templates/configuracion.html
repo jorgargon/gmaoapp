@@ -1374,14 +1374,29 @@
         if (!container) return;
 
         const etiquetas = {
-            'tecnico_puede_cerrar': 'El técnico puede hacer el cierre definitivo de la OT'
+            'tecnico_puede_cerrar': 'El técnico puede hacer el cierre definitivo de la OT',
+            'turno_planta': 'Turno de la planta (Cálculo de KPIs)'
         };
+
+        const turnosOpciones = [
+            { val: '8/5', txt: '8h x 5 días (40h/sem)' },
+            { val: '8/6', txt: '8h x 6 días (48h/sem)' },
+            { val: '10/5', txt: '10h x 5 días (50h/sem)' },
+            { val: '12/5', txt: '12h x 5 días (60h/sem)' },
+            { val: '16/5', txt: '16h x 5 días (80h/sem)' },
+            { val: '16/6', txt: '16h x 6 días (96h/sem)' },
+            { val: '12/7', txt: '12h x 7 días (84h/sem)' },
+            { val: '24/5', txt: '24h x 5 días (120h/sem)' },
+            { val: '24/6', txt: '24h x 6 días (144h/sem)' },
+            { val: '24/7', txt: '24h x 7 días (Continuo - 168h/sem)' }
+        ];
 
         let html = '';
         configData.forEach(item => {
+            const label = etiquetas[item.clave] || item.clave;
+
             if (item.tipo === 'booleano') {
                 const checked = item.valor === 'true' ? 'checked' : '';
-                const label = etiquetas[item.clave] || item.clave;
                 html += `
                 <div class="formGroup" style="display:flex; align-items:center; gap: 12px; margin-bottom: 1.2rem;">
                     <label class="switch" style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">
@@ -1397,10 +1412,32 @@
                                          transform: translateX(${item.valor === 'true' ? '20px' : '0'})"></span>
                         </span>
                     </label>
-                    <div>
+                    <div style="flex: 1;">
                         <strong>${label}</strong>
-                        ${item.descripcion ? `<div style="color:var(--text-muted); font-size:.85rem;">${item.descripcion}</div>` : ''}
+                        ${item.descripcion ? `<div style="color:var(--text-muted); font-size:.85rem; margin-top:4px;">${item.descripcion}</div>` : ''}
                     </div>
+                </div>`;
+            } else if (item.tipo === 'texto' && item.clave === 'turno_planta') {
+                const optionsHtml = turnosOpciones.map(opt =>
+                    `<option value="${opt.val}" ${item.valor === opt.val ? 'selected' : ''}>${opt.txt}</option>`
+                ).join('');
+
+                html += `
+                <div class="formGroup" style="margin-bottom: 1.2rem; background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border);">
+                    <div style="margin-bottom: 10px;">
+                        <strong><i class="fas fa-clock" style="color: var(--primary)"></i> ${label}</strong>
+                        ${item.descripcion ? `<div style="color:var(--text-muted); font-size:.85rem; margin-top:4px;">${item.descripcion}</div>` : ''}
+                    </div>
+                    <select id="config_${item.clave}" class="formControl" style="max-width: 300px;" onchange="updateConfigText('${item.clave}', this.value)">
+                        ${optionsHtml}
+                    </select>
+                </div>`;
+            } else if (item.tipo === 'texto') {
+                html += `
+                <div class="formGroup" style="margin-bottom: 1.2rem;">
+                    <label><strong>${label}</strong></label>
+                    ${item.descripcion ? `<div style="color:var(--text-muted); font-size:.85rem; margin-bottom: 8px;">${item.descripcion}</div>` : ''}
+                    <input type="text" id="config_${item.clave}" class="formControl" value="${item.valor}" onchange="updateConfigText('${item.clave}', this.value)">
                 </div>`;
             }
         });
@@ -1414,6 +1451,12 @@
         if (!item) return;
         item.valor = item.valor === 'true' ? 'false' : 'true';
         renderConfigGeneral();
+    }
+
+    function updateConfigText(clave, valor) {
+        const item = configData.find(i => i.clave === clave);
+        if (!item) return;
+        item.valor = valor;
     }
 
     async function guardarConfigGeneral() {

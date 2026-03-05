@@ -86,6 +86,9 @@ db.init_app(app)
 from blueprints.indicadores import bp as indicadores_bp
 app.register_blueprint(indicadores_bp)
 
+from blueprints.kpis import bp as kpis_bp
+app.register_blueprint(kpis_bp)
+
 from blueprints.mobile import bp as mobile_bp
 app.register_blueprint(mobile_bp)
 
@@ -2918,6 +2921,7 @@ def eliminarTecnico(id):
 
 _CONFIG_DEFAULTS = [
     ('tecnico_puede_cerrar', 'false', 'El técnico puede hacer el cierre definitivo sin necesidad de un responsable', 'booleano'),
+    ('turno_planta', '24/7', 'Régimen de turnos de la planta (horas/día × días/semana). Usado para calcular horas de período en KPIs (MTBF, MTTR, Disponibilidad)', 'texto'),
 ]
 
 def _seed_config():

@@ -360,3 +360,13 @@ def api_dash_heatmap():
     nivel, nivel_id = _dash_nivel()
     limit = request.args.get('limit', 15, type=int)
     return jsonify(ds.get_heatmap_equipos(fi, ff, limit, nivel, nivel_id))
+
+
+# --- KPI Evolución mensual (MTBF, MTTR, Disponibilidad)
+
+@bp.route('/api/dashboard/kpis-evolucion')
+@responsable_required
+def api_dash_kpis_evolucion():
+    fi, ff = _dash_fechas()
+    nivel, nivel_id = _dash_nivel()
+    return jsonify(ds.get_kpis_evolucion(fi, ff, nivel, nivel_id))

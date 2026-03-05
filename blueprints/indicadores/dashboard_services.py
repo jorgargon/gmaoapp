@@ -12,7 +12,8 @@ Adaptado al modelo real del proyecto:
 Nota: usa func.strftime('%Y-%m', ...) → SQLite. Para PostgreSQL sustituir por
       func.to_char(col, 'YYYY-MM').
 """
-from datetime import datetime
+import calendar as _cal
+from datetime import datetime, date as _date
 from collections import defaultdict
 
 from sqlalchemy import func, case, desc, or_, and_
@@ -585,3 +586,116 @@ def get_heatmap_equipos(fi, ff, limit=15, nivel=None, nivel_id=None):
         })
 
     return series
+
+
+# =============================================================================
+# SERVICIO 8 – Evolución mensual de KPIs: MTBF, MTTR, Disponibilidad
+# =============================================================================
+
+# Mapa de turnos: 'horas/días' → (horas_dia, dias_semana)
+_TURNOS = {
+    '8/5':  (8,  5),
+    '8/6':  (8,  6),
+    '10/5': (10, 5),
+    '12/5': (12, 5),
+    '16/5': (16, 5),
+    '16/6': (16, 6),
+    '12/7': (12, 7),
+    '24/5': (24, 5),
+    '24/6': (24, 6),
+    '24/7': (24, 7),
+}
+
+
+def _horas_operativas(fecha_ini, fecha_fin, turno_key):
+    """
+    Calcula las horas operativas reales entre dos fechas según el turno configurado.
+    Si dias_semana < 7, solo cuenta los días laborables (lunes-viernes para /5, +sábado para /6).
+    """
+    from datetime import timedelta
+    horas_dia, dias_semana = _TURNOS.get(turno_key, (24, 7))
+    total = 0.0
+    current = fecha_ini
+    while current <= fecha_fin:
+        dow = current.weekday()  # 0=lun, 6=dom
+        if dias_semana == 7:
+            total += horas_dia
+        elif dias_semana == 6 and dow < 6:   # lun-sáb
+            total += horas_dia
+        elif dias_semana == 5 and dow < 5:   # lun-vie
+            total += horas_dia
+        current += timedelta(days=1)
+    return total
+
+
+def get_kpis_evolucion(fi, ff, nivel=None, nivel_id=None):
+    """
+    Evolución mensual de MTBF, MTTR y Disponibilidad operacional (EN 13306).
+    Cada mes se calcula de forma independiente.
+
+    Solo se usan OTs correctivas con tiempoParada > 0 (averías con paro registrado).
+    Las preventivas/predictivas NO son fallos y quedan excluidas.
+    OTs correctivas con tiempoParada null o 0 se tratan como dato faltante.
+
+    Fórmulas coherentes entre sí (MTBF/(MTBF+MTTR) = tiempo_func/horas_periodo):
+      n_fallos      = count(correctivas con tiempoParada > 0)
+      horas_paro    = sum(tiempoParada de esas correctivas)
+      tiempo_func   = horas_periodo - horas_paro
+      MTBF          = tiempo_func / n_fallos  (h)
+      MTTR          = horas_paro  / n_fallos  (h)
+      Disponibilidad = tiempo_func / horas_periodo × 100  (%)
+    """
+    from models import ConfiguracionGeneral
+    turno_key = ConfiguracionGeneral.obtener('turno_planta', '24/7')
+
+    fi_dt, ff_dt = _fi_ff_dt(fi, ff)
+    meses = _mes_range(fi, ff)
+    sf = _scope_filter(nivel, nivel_id)
+
+    # Una sola query: correctivas con tiempoParada > 0, agrupadas por mes
+    q = db.session.query(
+        func.strftime('%Y-%m', OrdenTrabajo.fechaCreacion).label('mes'),
+        func.count(OrdenTrabajo.id).label('n_fallos'),
+        func.sum(OrdenTrabajo.tiempoParada).label('horas_paro'),
+    ).filter(
+        OrdenTrabajo.fechaCreacion >= fi_dt,
+        OrdenTrabajo.fechaCreacion <= ff_dt,
+        OrdenTrabajo.tipo == 'correctivo',
+        OrdenTrabajo.tiempoParada > 0,
+    )
+    if sf is not None:
+        q = q.filter(sf)
+    rows = q.group_by('mes').all()
+
+    fallos_mes = {r.mes: r.n_fallos       for r in rows}
+    paro_mes   = {r.mes: r.horas_paro or 0.0 for r in rows}
+
+    # ── Calcular KPIs por mes ────────────────────────────────────────────────
+    mtbf_data, mttr_data, disp_data = [], [], []
+    for ym in meses:
+        y, m = map(int, ym.split('-'))
+        days_in_month = _cal.monthrange(y, m)[1]
+        mes_start = _date(y, m, 1)
+        mes_end   = _date(y, m, days_in_month)
+        # Período efectivo dentro del rango de fechas solicitado
+        periodo_ini = max(fi, mes_start)
+        periodo_fin = min(ff, mes_end)
+        horas_periodo = _horas_operativas(periodo_ini, periodo_fin, turno_key)
+
+        n_fallos   = fallos_mes.get(ym, 0)
+        horas_paro = paro_mes.get(ym, 0.0)
+        tiempo_func = max(horas_periodo - horas_paro, 0.0)
+
+        mtbf_data.append(round(tiempo_func / n_fallos, 1) if n_fallos > 0 else None)
+        mttr_data.append(round(horas_paro  / n_fallos, 2) if n_fallos > 0 else None)
+        # Disponibilidad siempre calculable (sin fallos = 100%)
+        disp_data.append(round(tiempo_func / horas_periodo * 100, 2) if horas_periodo > 0 else None)
+
+    return {
+        'labels':         [_label_mes(m) for m in meses],
+        'mtbf':           mtbf_data,
+        'mttr':           mttr_data,
+        'disponibilidad': disp_data,
+        'turno':          turno_key,
+    }
+

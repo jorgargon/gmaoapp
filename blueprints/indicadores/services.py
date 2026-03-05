@@ -915,19 +915,16 @@ def calcular_indicadores(fecha_inicio, fecha_fin, nivel=None, nivel_id=None):
     horas_total = 0.0
     horas_correctivo = 0.0
     horas_preventivo = 0.0
-    horas_paro_total = 0.0
 
     for o in ordenes:
         horas, coste_mo = _horas_y_coste_mo(o, tecnicos_dict, coste_defecto)
         coste_rec = _coste_recambios_orden(o)
         coste_ext = o.costeTallerExterno or 0.0
         coste_ot = coste_mo + coste_rec + coste_ext
-        hp = o.tiempoParada or 0.0
 
         coste_total += coste_ot
         coste_recambios_total += coste_rec
         horas_total += horas
-        horas_paro_total += hp
 
         if o.tipo == 'correctivo':
             coste_correctivo += coste_ot
@@ -938,31 +935,55 @@ def calcular_indicadores(fecha_inicio, fecha_fin, nivel=None, nivel_id=None):
 
     # ── Parámetros temporales ─────────────────────────────────────────────────
     delta_dias = (fecha_fin - fecha_inicio).days + 1
-    horas_periodo = delta_dias * 24  # Asume operación 24/7
+
+    # Horas operativas según el turno configurado en Configuración General
+    _TURNOS = {
+        '8/5': (8, 5), '8/6': (8, 6), '10/5': (10, 5), '12/5': (12, 5),
+        '16/5': (16, 5), '16/6': (16, 6), '12/7': (12, 7),
+        '24/5': (24, 5), '24/6': (24, 6), '24/7': (24, 7),
+    }
+    turno_key = ConfiguracionGeneral.obtener('turno_planta', '24/7')
+    horas_dia_t, dias_semana_t = _TURNOS.get(turno_key, (24, 7))
+    horas_periodo = 0.0
+    _cur = fecha_inicio
+    while _cur <= fecha_fin:
+        _dow = _cur.weekday()
+        if dias_semana_t == 7:
+            horas_periodo += horas_dia_t
+        elif dias_semana_t == 6 and _dow < 6:
+            horas_periodo += horas_dia_t
+        elif dias_semana_t == 5 and _dow < 5:
+            horas_periodo += horas_dia_t
+        _cur += timedelta(days=1)
 
     # ── Valor de stock de recambios ───────────────────────────────────────────
     valor_stock = db.session.query(
         func.sum(Recambio.stockActual * Recambio.precioUnitario)
     ).scalar() or 0.0
 
-    # ── Indicadores Técnicos ──────────────────────────────────────────────────
+    # ── Indicadores Técnicos (EN 13306) ──────────────────────────────────────
+    #
+    # Solo se usan OTs correctivas con tiempoParada > 0 (averías con paro real).
+    # Las preventivas/predictivas NO son fallos y no entran en MTBF/MTTR.
+    # OTs correctivas sin tiempoParada registrado se tratan como dato faltante.
+    #
+    # MTBF = tiempo_func / n_fallos
+    # MTTR = horas_paro_corr / n_fallos
+    # Disp = tiempo_func / horas_periodo  ← idéntico a MTBF/(MTBF+MTTR)
+
+    correctivas_con_paro = [o for o in correctivas if (o.tiempoParada or 0) > 0]
+    n_fallos          = len(correctivas_con_paro)
+    horas_paro_corr   = sum(o.tiempoParada for o in correctivas_con_paro)
 
     # T1 - Disponibilidad operacional
-    tiempo_func = max(horas_periodo - horas_paro_total, 0.0)
-    t1 = (tiempo_func / horas_periodo * 100) if horas_periodo > 0 else None
+    tiempo_func = max(horas_periodo - horas_paro_corr, 0.0)
+    t1 = round(tiempo_func / horas_periodo * 100, 2) if horas_periodo > 0 else None
 
     # T3 - MTBF
-    n_fallos = len(correctivas)
-    t3 = tiempo_func / n_fallos if n_fallos > 0 else None
+    t3 = round(tiempo_func / n_fallos, 2) if n_fallos > 0 else None
 
-    # T4 - MTTR
-    correctivas_cerradas = [o for o in correctivas if o.estado == 'cerrada']
-    n_cerradas = len(correctivas_cerradas)
-    horas_reparacion = sum(
-        _horas_y_coste_mo(o, tecnicos_dict, coste_defecto)[0]
-        for o in correctivas_cerradas
-    )
-    t4 = horas_reparacion / n_cerradas if n_cerradas > 0 else None
+    # T4 - MTTR (tiempo medio de parada por avería, no horas de técnico)
+    t4 = round(horas_paro_corr / n_fallos, 2) if n_fallos > 0 else None
 
     # T8 - % horas preventivo
     t8 = (horas_preventivo / horas_total * 100) if horas_total > 0 else None
@@ -1087,7 +1108,7 @@ def calcular_indicadores(fecha_inicio, fecha_fin, nivel=None, nivel_id=None):
             },
             'T4': {
                 'valor': _fmt(t4, 2), 'unidad': 'h', 'nombre': 'MTTR (T4)',
-                'referencia': 'Objetivo < 4 h en críticos · < 24 h en no críticos',
+                'referencia': 'Tiempo medio de paro por avería · Obj. < 4 h críticos · < 24 h no críticos',
             },
             'T8': {
                 'valor': _fmt(t8), 'unidad': '%', 'nombre': '% Horas preventivo (T8)',
@@ -1130,8 +1151,9 @@ def calcular_indicadores(fecha_inicio, fecha_fin, nivel=None, nivel_id=None):
             'total_correctivas': len(correctivas),
             'total_preventivas': len(preventivas),
             'horas_total': round(horas_total, 1),
-            'horas_paro': round(horas_paro_total, 1),
+            'horas_paro': round(horas_paro_corr, 1),
             'horas_periodo': horas_periodo,
+            'turno_planta': turno_key,
             'coste_total': round(coste_total, 2),
             'coste_recambios': round(coste_recambios_total, 2),
             'coste_talleres': round(sum(o.costeTallerExterno or 0 for o in ordenes), 2),
