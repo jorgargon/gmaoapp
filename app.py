@@ -1490,6 +1490,7 @@ def cambiarEstadoOrden(id):
     data = request.get_json()
     nuevoEstado = data['estado']
     nueva_ot_numero = None
+    nueva_ot_id = None
     ots_correctivas = []
     
     # Registrar fechas según el cambio de estado
@@ -1534,7 +1535,7 @@ def cambiarEstadoOrden(id):
         
         # Auto-generación de la siguiente OT preventiva (al cerrado_parcial)
         if orden.tipo == 'preventivo':
-            nueva_ot_numero = _generarSiguienteOTPreventivo(orden)
+            nueva_ot_numero, nueva_ot_id = _generarSiguienteOTPreventivo(orden)
             # Generar OTs correctivas por items de checklist NOK
             ots_correctivas = _generarCorrectivosChecklist(orden)
             
@@ -1572,6 +1573,7 @@ def cambiarEstadoOrden(id):
     respuesta = {'mensaje': f'Estado cambiado a {nuevoEstado}'}
     if nueva_ot_numero:
         respuesta['nuevaOT'] = nueva_ot_numero
+        respuesta['nuevaOTId'] = nueva_ot_id
         respuesta['mensajeOT'] = f'Nueva OT preventiva generada: {nueva_ot_numero}'
     if ots_correctivas:
         respuesta['otsCorrectivas'] = ots_correctivas
@@ -1606,7 +1608,17 @@ def _generarSiguienteOTPreventivo(orden):
         elif orden.frecuenciaTipo == 'semanas':
             fecha_siguiente = fecha_cierre + timedelta(weeks=orden.frecuenciaValor)
         elif orden.frecuenciaTipo == 'meses':
-            fecha_siguiente = fecha_cierre + timedelta(days=orden.frecuenciaValor * 30)
+            try:
+                from dateutil.relativedelta import relativedelta
+                fecha_siguiente = fecha_cierre + relativedelta(months=orden.frecuenciaValor)
+            except ImportError:
+                fecha_siguiente = fecha_cierre + timedelta(days=orden.frecuenciaValor * 30)
+        elif orden.frecuenciaTipo == 'anos':
+            try:
+                from dateutil.relativedelta import relativedelta
+                fecha_siguiente = fecha_cierre + relativedelta(years=orden.frecuenciaValor)
+            except ImportError:
+                fecha_siguiente = fecha_cierre + timedelta(days=orden.frecuenciaValor * 365)
         else:
             fecha_siguiente = fecha_cierre + timedelta(days=orden.frecuenciaValor)
 
@@ -1629,10 +1641,10 @@ def _generarSiguienteOTPreventivo(orden):
         )
         db.session.add(nueva)
         db.session.flush()
-        return nueva.numero
+        return nueva.numero, nueva.id
     except Exception as e:
         print(f'Error al generar siguiente OT preventiva: {e}')
-    return None
+    return None, None
 
 
 def _generarCorrectivosChecklist(orden):
@@ -1732,7 +1744,7 @@ def apiOrdenesPreventivo():
         # Frecuencia legible
         frec_label = None
         if o.frecuenciaValor and o.frecuenciaTipo:
-            tipos = {'dias': 'día(s)', 'semanas': 'semana(s)', 'meses': 'mes(es)'}
+            tipos = {'dias': 'día(s)', 'semanas': 'semana(s)', 'meses': 'mes(es)', 'anos': 'año(s)'}
             frec_label = f"Cada {o.frecuenciaValor} {tipos.get(o.frecuenciaTipo, o.frecuenciaTipo)}"
 
         resultado.append({
@@ -2238,14 +2250,18 @@ def apiIconosDisponibles():
 def apiGamas():
     activo = request.args.get('activo', '')
     buscar = request.args.get('buscar', '')
-    
+    tipo = request.args.get('tipo', '')
+
     query = GamaMantenimiento.query
-    
+
     if activo == 'true':
         query = query.filter_by(activo=True)
     elif activo == 'false':
         query = query.filter_by(activo=False)
-    
+
+    if tipo:
+        query = query.filter_by(tipo=tipo)
+
     if buscar:
         query = query.filter(
             or_(
@@ -2559,11 +2575,20 @@ def crearAsignacion():
     
     # Calcular próxima ejecución
     asignacion.calcularProximaEjecucion()
-    
+
     db.session.add(asignacion)
+    db.session.flush()  # Para obtener asignacion.id antes del commit
+
+    # Generar la primera OT preventiva automáticamente
+    orden = _crearOTDesdeAsignacion(asignacion)
+
     db.session.commit()
-    
-    return jsonify({'id': asignacion.id, 'mensaje': 'Asignación creada correctamente'}), 201
+
+    return jsonify({
+        'id': asignacion.id,
+        'otNumero': orden.numero,
+        'mensaje': f'Asignación creada y OT preventiva generada: {orden.numero}'
+    }), 201
 
 @app.route('/api/asignacion/<int:id>')
 def obtenerAsignacion(id):
@@ -2608,12 +2633,9 @@ def desactivarAsignacion(id):
     db.session.commit()
     return jsonify({'mensaje': 'Asignación desactivada correctamente'})
 
-@app.route('/api/asignacion/<int:id>/generar-ot', methods=['POST'])
-def generarOTDesdeAsignacion(id):
-    asignacion = AsignacionGama.query.get_or_404(id)
+def _crearOTDesdeAsignacion(asignacion):
+    """Crea una OT preventiva a partir de una asignación de gama. No hace commit."""
     gama = asignacion.gama
-    
-    # Crear OT preventiva
     orden = OrdenTrabajo(
         numero=OrdenTrabajo.generarNumero(),
         tipo='preventivo',
@@ -2627,22 +2649,21 @@ def generarOTDesdeAsignacion(id):
         gamaId=asignacion.gamaId,
         frecuenciaTipo=asignacion.frecuenciaTipo,
         frecuenciaValor=asignacion.frecuenciaValor,
-        tiempoEstimado=gama.tiempoEstimado / 60 if gama.tiempoEstimado else None,  # Convertir minutos a horas
+        tiempoEstimado=gama.tiempoEstimado / 60 if gama.tiempoEstimado else None,
         fechaProgramada=datetime.combine(asignacion.proximaEjecucion, datetime.min.time()) if asignacion.proximaEjecucion else None
     )
-    
-    # Si es máquina, añadir maquinaId para compatibilidad
     if asignacion.equipoTipo == 'maquina':
         orden.maquinaId = asignacion.equipoId
-    
     db.session.add(orden)
-    
-    # Actualizar fechas de la asignación
     asignacion.ultimaEjecucion = date.today()
     asignacion.calcularProximaEjecucion()
-    
+    return orden
+
+@app.route('/api/asignacion/<int:id>/generar-ot', methods=['POST'])
+def generarOTDesdeAsignacion(id):
+    asignacion = AsignacionGama.query.get_or_404(id)
+    orden = _crearOTDesdeAsignacion(asignacion)
     db.session.commit()
-    
     return jsonify({
         'id': orden.id,
         'numero': orden.numero,

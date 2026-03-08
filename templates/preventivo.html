@@ -67,6 +67,15 @@
     // ─── Carga inicial ───────────────────────────────────────────────────────────
     document.addEventListener('DOMContentLoaded', async () => {
         setRefreshCallback(cargarPreventivos);
+        // Cargar tipos necesarios para el formulario de edición de OTs
+        try {
+            window.tiposCache = await apiCall('/api/tipos-intervencion');
+        } catch (e) {
+            window.tiposCache = [
+                { codigo: 'correctivo', nombre: 'Correctivo', icono: 'fa-wrench', color: '#e53935' },
+                { codigo: 'preventivo', nombre: 'Preventivo', icono: 'fa-calendar-check', color: '#43a047' }
+            ];
+        }
         await cargarGamas();
         await cargarPreventivos();
     });
@@ -105,7 +114,7 @@
                     : '-';
 
                 return `
-            <tr class="row-${o.estado}" onclick="verOrden(${o.id})" style="cursor:pointer;">
+            <tr class="row-${o.estado}${window._otNuevasIds && window._otNuevasIds.has(o.id) ? ' row-nueva-ot' : ''}" onclick="verOrden(${o.id})" style="cursor:pointer;">
                 <td style="white-space:nowrap;"><span class="codigoTag">${o.numero}</span></td>
                 <td style="white-space:nowrap;"><span class="tag tag-${o.prioridad}">${o.prioridad}</span></td>
                 <td style="white-space:nowrap;">${fechaFmt}</td>
@@ -135,9 +144,8 @@
             }).join('');
         } catch (e) { }
 
-        const gamasOpts = gamasCache.length
-            ? gamasCache.map(g => `<option value="${g.id}">${g.nombre} (${g.codigo})</option>`).join('')
-            : '<option value="">Sin gamas disponibles</option>';
+        const gamasData = gamasCache.length ? gamasCache : [];
+        const gamasOpts = gamasData.map(g => `<option value="${g.id}">${g.nombre} (${g.codigo})</option>`).join('');
 
         const d = new Date();
         const hoy = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
@@ -155,7 +163,10 @@
             </div>
             <div class="formGroup">
                 <label>Gama de mantenimiento</label>
-                <select id="npGama" class="formControl">
+                <input type="text" id="npGamaFiltro" class="formControl" placeholder="Buscar para filtrar..."
+                       style="margin-bottom:4px;" oninput="filtrarGamas(this.value)">
+                <select id="npGama" class="formControl"
+                        onchange="if(this.value){document.getElementById('npGamaFiltro').value=this.options[this.selectedIndex].text;}else{document.getElementById('npGamaFiltro').value='';}">
                     <option value="">Sin gama específica</option>
                     ${gamasOpts}
                 </select>
@@ -172,6 +183,7 @@
                     <option value="dias">Días</option>
                     <option value="semanas">Semanas</option>
                     <option value="meses">Meses</option>
+                    <option value="anos">Años</option>
                 </select>
             </div>
             <div class="formGroup">
@@ -201,6 +213,18 @@
         </button>`;
 
         openModal('Nueva Orden de Trabajo Preventiva', html, footer);
+    }
+
+    function filtrarGamas(texto) {
+        const sel = document.getElementById('npGama');
+        if (!sel) return;
+        const q = texto.toLowerCase();
+        const valorActual = sel.value;
+        const filtradas = gamasCache.filter(g => !q || g.nombre.toLowerCase().includes(q) || g.codigo.toLowerCase().includes(q));
+        sel.innerHTML = '<option value="">Sin gama específica</option>' +
+            filtradas.map(g => `<option value="${g.id}">${g.nombre} (${g.codigo})</option>`).join('');
+        // Mantener selección si sigue disponible
+        if (valorActual && filtradas.find(g => g.id == valorActual)) sel.value = valorActual;
     }
 
     async function confirmarNuevaPrev() {

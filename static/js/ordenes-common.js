@@ -16,6 +16,14 @@ window.refreshOrdenesCallback = function () {
 // Set de IDs de OTs recién creadas (para resaltado visual temporal)
 window._otNuevasIds = new Set();
 
+function marcarOTModificada(id) {
+    window._otNuevasIds.add(id);
+    // Si ya había un timeout, lo cancelamos para reiniciarlo
+    if (window._otNuevasTimeouts) clearTimeout(window._otNuevasTimeouts[id]);
+    else window._otNuevasTimeouts = {};
+    window._otNuevasTimeouts[id] = setTimeout(() => window._otNuevasIds.delete(id), 60000);
+}
+
 function setRefreshCallback(callback) {
     window.refreshOrdenesCallback = callback;
 }
@@ -24,6 +32,12 @@ function setRefreshCallback(callback) {
 function getTipoInfo(codigo) {
     const cache = window.tiposCache || [];
     return cache.find(t => t.codigo === codigo) || { nombre: codigo, icono: 'fa-wrench', color: '#666' };
+}
+
+function formatFrecuencia(valor, tipo) {
+    const etiquetas = { dias: ['día', 'días'], semanas: ['semana', 'semanas'], meses: ['mes', 'meses'], anos: ['año', 'años'] };
+    const [sing, plur] = etiquetas[tipo] || [tipo, tipo];
+    return `Cada ${valor} ${valor === 1 ? sing : plur}`;
 }
 
 function formatEstado(estado) {
@@ -92,6 +106,16 @@ async function verOrden(id) {
                     <label>Técnico</label>
                     <span>${o.tecnicoAsignado || 'Sin asignar'}</span>
                 </div>
+                ${o.tipo === 'preventivo' ? `
+                <div class="infoItem">
+                    <label><i class="fas fa-layer-group"></i> Gama de Mantenimiento</label>
+                    <span>${o.gamaNombre || '<em style="color:#999">Sin gama asignada</em>'}</span>
+                </div>
+                <div class="infoItem">
+                    <label><i class="fas fa-sync-alt"></i> Frecuencia</label>
+                    <span>${o.frecuenciaValor && o.frecuenciaTipo ? formatFrecuencia(o.frecuenciaValor, o.frecuenciaTipo) : '-'}</span>
+                </div>
+                ` : ''}
                 <div class="infoItem full">
                     <label>Descripción del Problema</label>
                     <span>${o.descripcionProblema || '-'}</span>
@@ -388,6 +412,26 @@ async function mostrarFormularioOT(orden = null, maquinaIdPreset = null, tipoPre
         } catch (e) { }
     }
 
+    let gamasOpts = '<option value="">-- Sin gama --</option>';
+    try {
+        const gamas = await apiCall('/api/gamas?tipo=preventivo&activo=true');
+        gamasOpts += gamas.map(g =>
+            `<option value="${g.id}" ${orden?.gamaId === g.id ? 'selected' : ''}>${g.codigo} — ${g.nombre}</option>`
+        ).join('');
+    } catch (e) { }
+
+    // Cargar tipos si no están en caché (puede ocurrir en páginas que no los inicializan)
+    if (!window.tiposCache || window.tiposCache.length === 0) {
+        try {
+            window.tiposCache = await apiCall('/api/tipos-intervencion');
+        } catch (e) {
+            window.tiposCache = [
+                { codigo: 'correctivo', nombre: 'Correctivo' },
+                { codigo: 'preventivo', nombre: 'Preventivo' }
+            ];
+        }
+    }
+
     const tiposCache = window.tiposCache || [];
     const tipoActual = orden?.tipo || tipoPreset || 'correctivo';
     const opcionesTipo = tiposCache.map(t =>
@@ -449,8 +493,34 @@ async function mostrarFormularioOT(orden = null, maquinaIdPreset = null, tipoPre
 
         <div class="formGroup">
             <label>Fecha Programada</label>
-            <input type="date" id="otFechaProg" class="formControl" 
+            <input type="date" id="otFechaProg" class="formControl"
                    value="${orden?.fechaProgramada ? orden.fechaProgramada.slice(0, 10) : ''}">
+        </div>
+
+        <!-- Sección exclusiva preventivo -->
+        <div id="seccionPreventivo" style="display:${tipoActual === 'preventivo' ? 'block' : 'none'}; border-top:1px solid #eee; margin-top:12px; padding-top:12px;">
+            <div class="formGroup">
+                <label><i class="fas fa-layer-group"></i> Gama de Mantenimiento</label>
+                <select id="otGamaId" class="formControl">
+                    ${gamasOpts}
+                </select>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Frecuencia</label>
+                    <select id="otFrecuenciaTipo" class="formControl">
+                        <option value="dias" ${orden?.frecuenciaTipo === 'dias' ? 'selected' : ''}>Días</option>
+                        <option value="semanas" ${orden?.frecuenciaTipo === 'semanas' ? 'selected' : ''}>Semanas</option>
+                        <option value="meses" ${(!orden?.frecuenciaTipo || orden?.frecuenciaTipo === 'meses') ? 'selected' : ''}>Meses</option>
+                        <option value="anos" ${orden?.frecuenciaTipo === 'anos' ? 'selected' : ''}>Años</option>
+                    </select>
+                </div>
+                <div class="formGroup">
+                    <label>Cada (nº)</label>
+                    <input type="number" id="otFrecuenciaValor" class="formControl" min="1" step="1"
+                           value="${orden?.frecuenciaValor || ''}" placeholder="Ej: 3">
+                </div>
+            </div>
         </div>
     </form>
 `;
@@ -461,6 +531,17 @@ async function mostrarFormularioOT(orden = null, maquinaIdPreset = null, tipoPre
 `;
 
     openModal(esEdicion ? 'Editar Orden de Trabajo' : 'Nueva Orden de Trabajo', html, footer);
+
+    // Mostrar/ocultar sección preventivo al cambiar tipo
+    setTimeout(() => {
+        const tipoSel = document.getElementById('otTipo');
+        if (tipoSel) {
+            tipoSel.addEventListener('change', function () {
+                document.getElementById('seccionPreventivo').style.display =
+                    this.value === 'preventivo' ? 'block' : 'none';
+            });
+        }
+    }, 100);
 }
 
 async function guardarOT(id) {
@@ -481,6 +562,15 @@ async function guardarOT(id) {
     const fechaProg = document.getElementById('otFechaProg').value;
     if (fechaProg) data.fechaProgramada = fechaProg;
 
+    // Campos exclusivos preventivo
+    if (data.tipo === 'preventivo') {
+        const gamaIdVal = document.getElementById('otGamaId')?.value;
+        data.gamaId = gamaIdVal ? parseInt(gamaIdVal) : null;
+        data.frecuenciaTipo = document.getElementById('otFrecuenciaTipo')?.value || null;
+        const fv = document.getElementById('otFrecuenciaValor')?.value;
+        data.frecuenciaValor = fv ? parseInt(fv) : null;
+    }
+
     if (!equipoTipo || !equipoId || !data.titulo) {
         showToast('Completa los campos obligatorios', 'error');
         return;
@@ -489,13 +579,11 @@ async function guardarOT(id) {
     try {
         if (id) {
             await apiCall(`/api/orden/${id}`, 'PUT', data);
+            marcarOTModificada(id);
             showToast('Orden actualizada', 'success');
         } else {
             const result = await apiCall('/api/orden', 'POST', data);
-            // Marcar como nueva para resaltado visual
-            window._otNuevasIds.add(result.id);
-            console.log('[DEBUG] OT nueva creada, ID añadido al Set:', result.id, 'Set:', [...window._otNuevasIds]);
-            setTimeout(() => window._otNuevasIds.delete(result.id), 30000);
+            marcarOTModificada(result.id);
             showToast(`OT ${result.numero} creada`, 'success');
         }
         closeModal();
@@ -541,6 +629,7 @@ async function avanzarEstadoOT(id, estadoActual) {
     if (!nuevo) return;
     try {
         await apiCall(`/api/orden/${id}/estado`, 'PUT', { estado: nuevo });
+        marcarOTModificada(id);
         closeModal();
         if (window.refreshOrdenesCallback) window.refreshOrdenesCallback();
         showToast(`Estado cambiado a ${formatEstado(nuevo)}`, 'success');
@@ -553,6 +642,7 @@ async function revertirEnCurso(id) {
     if (!confirm('¿Seguro que deseas revertir la orden a "En Curso"? Esto eliminará la fecha de fin de la orden.')) return;
     try {
         await apiCall(`/api/orden/${id}/estado`, 'PUT', { estado: 'en_curso' });
+        marcarOTModificada(id);
         closeModal();
         if (window.refreshOrdenesCallback) window.refreshOrdenesCallback();
         showToast('Orden revertida a En Curso', 'success');
@@ -617,6 +707,7 @@ async function confirmarFinalizarTrabajo(id) {
 
         const resultado = await apiCall(`/api/orden/${id}/estado`, 'PUT', { estado: 'cerrado_parcial' });
 
+        marcarOTModificada(id);
         closeModal();
         if (window.refreshOrdenesCallback) window.refreshOrdenesCallback();
         showToast('Trabajo finalizado. Pendiente de cierre definitivo por el responsable.', 'success');
@@ -628,6 +719,9 @@ async function confirmarFinalizarTrabajo(id) {
             }, 800);
         }
         if (resultado.nuevaOT) {
+            if (resultado.nuevaOTId) {
+                marcarOTModificada(resultado.nuevaOTId);
+            }
             setTimeout(() => {
                 showToast(`📅 ${resultado.mensajeOT}`, 'info');
             }, 1600);
@@ -704,6 +798,7 @@ async function confirmarAsignacionOT(id) {
     try {
         await apiCall(`/api/orden/${id}`, 'PUT', { tecnicoAsignado: tecnico });
         await apiCall(`/api/orden/${id}/estado`, 'PUT', { estado: 'asignada' });
+        marcarOTModificada(id);
         closeModal();
         if (window.refreshOrdenesCallback) window.refreshOrdenesCallback();
         showToast(`OT asignada a ${tecnico}`, 'success');
@@ -731,6 +826,7 @@ async function cerrarOT(id) {
 async function confirmarCierreDefinitivo(id) {
     try {
         await apiCall(`/api/orden/${id}/estado`, 'PUT', { estado: 'cerrada' });
+        marcarOTModificada(id);
         closeModal();
         if (window.refreshOrdenesCallback) window.refreshOrdenesCallback();
         showToast('Cierre definitivo realizado correctamente', 'success');
@@ -803,6 +899,7 @@ async function confirmarIniciarTrabajo(ordenId) {
 
     try {
         const result = await apiCall(`/api/orden/${ordenId}/iniciar`, 'POST', { tecnico });
+        marcarOTModificada(ordenId);
         showToast(result.mensaje, 'success');
         closeModal();
         verOrden(ordenId);
@@ -876,6 +973,7 @@ async function confirmarPausarTrabajo(ordenId) {
 
     try {
         const result = await apiCall(`/api/orden/${ordenId}/pausar`, 'POST', { tecnico });
+        marcarOTModificada(ordenId);
         showToast(`${result.mensaje}. Duración: ${result.duracionSesion}h`, 'success');
         closeModal();
         verOrden(ordenId);
