@@ -14,14 +14,67 @@ window.refreshOrdenesCallback = function () {
 };
 
 // Set de IDs de OTs recién creadas (para resaltado visual temporal)
+// Persistido en sessionStorage para sobrevivir navegación entre páginas
+const _OT_STORAGE_KEY = 'gmao_otNuevas';
+const _OT_TTL_MS = 60000;
+
 window._otNuevasIds = new Set();
+window._otNuevasTimeouts = {};
+
+function _otStorageLoad() {
+    try {
+        const raw = sessionStorage.getItem(_OT_STORAGE_KEY);
+        if (!raw) return {};
+        return JSON.parse(raw);
+    } catch (e) { return {}; }
+}
+
+function _otStorageSave(data) {
+    try { sessionStorage.setItem(_OT_STORAGE_KEY, JSON.stringify(data)); } catch (e) {}
+}
+
+function _otStorageRemove(id) {
+    const data = _otStorageLoad();
+    delete data[id];
+    _otStorageSave(data);
+}
+
+// Al cargar el script, restaurar IDs aún vigentes desde sessionStorage
+(function _otRestaurar() {
+    const now = Date.now();
+    const data = _otStorageLoad();
+    const expired = [];
+    Object.entries(data).forEach(([id, ts]) => {
+        const remaining = _OT_TTL_MS - (now - ts);
+        if (remaining <= 0) {
+            expired.push(id);
+        } else {
+            const numId = Number(id);
+            window._otNuevasIds.add(numId);
+            window._otNuevasTimeouts[numId] = setTimeout(() => {
+                window._otNuevasIds.delete(numId);
+                _otStorageRemove(id);
+            }, remaining);
+        }
+    });
+    if (expired.length) {
+        expired.forEach(id => delete data[id]);
+        _otStorageSave(data);
+    }
+})();
 
 function marcarOTModificada(id) {
     window._otNuevasIds.add(id);
-    // Si ya había un timeout, lo cancelamos para reiniciarlo
-    if (window._otNuevasTimeouts) clearTimeout(window._otNuevasTimeouts[id]);
-    else window._otNuevasTimeouts = {};
-    window._otNuevasTimeouts[id] = setTimeout(() => window._otNuevasIds.delete(id), 60000);
+    // Guardar en sessionStorage con timestamp actual
+    const data = _otStorageLoad();
+    data[id] = Date.now();
+    _otStorageSave(data);
+    // Reiniciar timeout en memoria
+    if (window._otNuevasTimeouts[id]) clearTimeout(window._otNuevasTimeouts[id]);
+    window._otNuevasTimeouts[id] = setTimeout(() => {
+        window._otNuevasIds.delete(id);
+        _otStorageRemove(id);
+    }, _OT_TTL_MS);
 }
 
 function setRefreshCallback(callback) {
