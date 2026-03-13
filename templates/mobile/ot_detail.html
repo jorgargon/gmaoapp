@@ -358,6 +358,11 @@
       <textarea class="m-textarea" id="observaciones" rows="2"
         placeholder="Observaciones adicionales…">{{ ot.observaciones or '' }}</textarea>
     </div>
+    <div class="m-field" style="margin-top:10px">
+      <label class="m-label"><i class="fas fa-industry" style="margin-right:6px;opacity:.7"></i>Tiempo de máquina parada (horas)</label>
+      <input type="number" class="m-input" id="tiempoParada" min="0" step="0.5"
+        placeholder="0" value="{{ ot.tiempoParada or '' }}">
+    </div>
     <button class="m-btn m-btn-secondary m-btn-full" style="margin-top:10px" onclick="guardarSolucion()">
       <i class="fas fa-save"></i> Guardar
     </button>
@@ -446,12 +451,6 @@
       ¿Confirmas que has finalizado el trabajo en la orden <strong>{{ ot.numero }}</strong>?
       {% if ot.tipo == 'preventivo' %}Se generará automáticamente la siguiente OT preventiva.{% endif %}
     </p>
-    <div class="m-field" style="margin-bottom:16px">
-      <label class="m-label"><i class="fas fa-industry" style="margin-right:6px;opacity:.7"></i>Tiempo de máquina parada (horas)</label>
-      <input type="number" class="m-input" id="tiempoParadaCierre" min="0" step="0.5"
-        placeholder="0" value="{{ ot.tiempoParada or '' }}">
-      <div style="font-size:.78rem;color:var(--m-text-muted);margin-top:4px">Horas que la máquina ha estado parada. Dejar vacío si no hubo parada.</div>
-    </div>
     <div class="m-btn-group">
       <button class="m-btn m-btn-secondary" onclick="cerrarModal('modalCerrar')">Cancelar</button>
       <button class="m-btn m-btn-success" id="btnConfirmarCierre" onclick="cerrarOT()">
@@ -569,7 +568,7 @@
     // Guardar solución y tiempoParada antes de cerrar
     const sol = document.getElementById('descripcionSolucion');
     const obs = document.getElementById('observaciones');
-    const parada = document.getElementById('tiempoParadaCierre');
+    const parada = document.getElementById('tiempoParada');
     const updates = {};
     if (sol && sol.value.trim()) updates.descripcionSolucion = sol.value.trim();
     if (obs && obs.value.trim()) updates.observaciones = obs.value.trim();
@@ -588,10 +587,10 @@
   function guardarSolucion() {
     const sol = document.getElementById('descripcionSolucion').value.trim();
     const obs = document.getElementById('observaciones').value.trim();
-    fetchAPI(`/api/orden/${OT_ID}`, 'PUT', {
-      descripcionSolucion: sol,
-      observaciones: obs
-    })
+    const paradaEl = document.getElementById('tiempoParada');
+    const body = { descripcionSolucion: sol, observaciones: obs };
+    if (paradaEl && paradaEl.value !== '') body.tiempoParada = parseFloat(paradaEl.value) || 0;
+    fetchAPI(`/api/orden/${OT_ID}`, 'PUT', body)
       .then(() => mToast('Guardado', 'success'))
       .catch(e => mToast(e, 'error'));
   }
