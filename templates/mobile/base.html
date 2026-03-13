@@ -36,10 +36,12 @@
     {% block content %}{% endblock %}
   </main>
 
-  <!-- FAB QR Scanner -->
+  <!-- FAB QR Scanner (oculto en páginas de detalle de OT) -->
+  {% if request.endpoint != 'mobile.ver_ot' %}
   <a href="{{ url_for('mobile.qr_scan') }}" class="m-fab-qr" title="Escanear QR">
     <i class="fas fa-qrcode"></i>
   </a>
+  {% endif %}
 
   <!-- Bottom nav -->
   <nav class="m-nav">

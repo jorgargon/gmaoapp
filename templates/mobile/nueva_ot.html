@@ -353,6 +353,8 @@ function abrirScannerEquipo() {
         return;
     }
     document.getElementById('qrScanOverlay').style.display = 'flex';
+    // Esperar un frame para que el navegador renderice el overlay con dimensiones reales
+    requestAnimationFrame(() => {
     qrScanner = new Html5Qrcode("qr-reader-inline");
     qrScanner.start(
         { facingMode: "environment" },
@@ -373,6 +375,7 @@ function abrirScannerEquipo() {
         mToast('No se pudo acceder a la cámara', 'error');
         document.getElementById('qrScanOverlay').style.display = 'none';
     });
+    }); // fin requestAnimationFrame
 }
 
 function cerrarScannerEquipo() {
