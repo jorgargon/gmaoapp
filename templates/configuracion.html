@@ -35,7 +35,7 @@
         <span class="configCardTitle">General</span>
         <span class="configCardDesc">Parámetros generales del sistema GMAO</span>
     </div>
-    <div class="configCard" onclick="window.location.href='{{ url_for('importacion.index') }}'">
+    <div class="configCard" data-href="{{ url_for('importacion.index') }}" onclick="window.location.href=this.dataset.href">
         <span class="configCardIcon"><i class="fas fa-file-import"></i></span>
         <span class="configCardTitle">Importación masiva</span>
         <span class="configCardDesc">Carga inicial de activos, gamas, histórico y más</span>
