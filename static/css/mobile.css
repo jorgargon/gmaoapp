@@ -879,3 +879,80 @@ body.movil-body {
   color: var(--m-text-muted);
   white-space: nowrap;
 }
+
+/* ── FAB QR Scanner ─────────────────────────────────────────── */
+.m-fab-qr {
+  position: fixed;
+  bottom: calc(var(--m-nav-h) + 16px);
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--m-primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  box-shadow: 0 4px 16px rgba(0, 86, 179, 0.35);
+  z-index: 100;
+  text-decoration: none;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+.m-fab-qr:active {
+  transform: scale(0.92);
+  box-shadow: 0 2px 8px rgba(0, 86, 179, 0.25);
+}
+
+/* ── QR Result page ─────────────────────────────────────────── */
+.m-qr-activo {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--m-card-bg);
+  border-radius: var(--m-radius);
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--m-shadow-sm);
+}
+.m-qr-activo-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--m-primary-light);
+  color: var(--m-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  flex-shrink: 0;
+}
+.m-qr-activo-info { flex: 1; min-width: 0; }
+.m-qr-activo-tipo {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--m-primary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.m-qr-activo-nombre {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--m-text);
+  margin-top: 2px;
+}
+.m-qr-activo-ruta {
+  font-size: 0.75rem;
+  color: var(--m-text-muted);
+  margin-top: 4px;
+}
+.m-qr-section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--m-text);
+  padding: 12px 4px 8px;
+}
+.m-qr-section-title i { color: var(--m-primary); }

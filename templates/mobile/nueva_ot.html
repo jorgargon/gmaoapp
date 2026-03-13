@@ -1,6 +1,42 @@
 {% extends "mobile/base.html" %}
 {% block title %}Nueva OT – GMAO{% endblock %}
 
+{% block head %}
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+.m-qr-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.9); z-index: 1000;
+    display: flex; flex-direction: column;
+}
+.m-qr-overlay-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; color: #fff; font-weight: 600;
+}
+.m-qr-overlay-close {
+    background: none; border: none; color: #fff; font-size: 1.3rem; cursor: pointer;
+    padding: 8px;
+}
+#qr-reader-inline { flex: 1; max-width: 400px; margin: 0 auto; }
+.m-btn-outline {
+    background: transparent;
+    border: 2px solid var(--m-primary);
+    color: var(--m-primary);
+    border-radius: 8px;
+    padding: 10px 16px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+}
+.m-btn-outline:hover { background: var(--m-primary-light); }
+</style>
+{% endblock %}
+
 {% block header %}
   <a href="{{ url_for('mobile.home') }}" class="m-header-back">
     <i class="fas fa-arrow-left"></i>
@@ -71,6 +107,24 @@
   </div>
   <div class="m-section-body">
     <div class="m-form">
+
+      {# Botón para escanear QR y seleccionar equipo #}
+      <div class="m-field">
+        <button type="button" class="m-btn-outline" onclick="abrirScannerEquipo()">
+          <i class="fas fa-qrcode"></i> Seleccionar equipo con QR
+        </button>
+      </div>
+
+      {# Overlay del escáner inline #}
+      <div id="qrScanOverlay" class="m-qr-overlay" style="display:none">
+        <div class="m-qr-overlay-header">
+          <span>Escanea el QR del equipo</span>
+          <button type="button" onclick="cerrarScannerEquipo()" class="m-qr-overlay-close">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+        <div id="qr-reader-inline"></div>
+      </div>
 
       <div class="m-field">
         <label class="m-label">Planta</label>
@@ -162,6 +216,8 @@
 {% block scripts %}
 <script>
 const NOMBRE_TECNICO = "{{ nombre_tecnico | e }}";
+const PREFILL_TIPO = "{{ prefill_tipo | e }}";
+const PREFILL_ID = {{ prefill_id | default(0) }};
 
 // Estado del equipo seleccionado (se va sobreescribiendo al bajar en la jerarquía)
 let equipo = { tipo: null, id: null };
@@ -286,5 +342,110 @@ function crearOT() {
       btn.innerHTML = '<i class="fas fa-plus-circle"></i> Crear orden de trabajo';
     });
 }
+
+// ---- Escáner QR inline para seleccionar equipo ----
+let qrScanner = null;
+const QR_PATTERN = /\/movil\/qr\/(\w+)\/(\d+)/;
+
+function abrirScannerEquipo() {
+    if (!window.isSecureContext) {
+        mToast('La cámara requiere HTTPS', 'error');
+        return;
+    }
+    document.getElementById('qrScanOverlay').style.display = 'flex';
+    qrScanner = new Html5Qrcode("qr-reader-inline");
+    qrScanner.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => {
+            qrScanner.stop().then(() => {
+                document.getElementById('qrScanOverlay').style.display = 'none';
+                const match = decodedText.match(QR_PATTERN);
+                if (match) {
+                    precargarEquipo(match[1], parseInt(match[2]));
+                } else {
+                    mToast('Código QR no reconocido', 'error');
+                }
+            });
+        },
+        () => {}
+    ).catch(() => {
+        mToast('No se pudo acceder a la cámara', 'error');
+        document.getElementById('qrScanOverlay').style.display = 'none';
+    });
+}
+
+function cerrarScannerEquipo() {
+    if (qrScanner) {
+        qrScanner.stop().catch(() => {});
+    }
+    document.getElementById('qrScanOverlay').style.display = 'none';
+}
+
+// ---- Pre-cargar equipo en cascada desde tipo+id ----
+async function precargarEquipo(tipo, id) {
+    // Obtener la jerarquía completa del equipo
+    try {
+        const r = await fetch(`/movil/api/qr-jerarquia?tipo=${tipo}&id=${id}`);
+        if (!r.ok) { mToast('Equipo no encontrado', 'error'); return; }
+        const data = await r.json();
+        // data = { planta, zona, linea, maquina, elemento } cada uno con {id, nombre} o null
+
+        // Seleccionar planta
+        if (data.planta) {
+            document.getElementById('plantaId').value = data.planta.id;
+            await _triggerCascadeAndSelect('planta', data.zona);
+        }
+        if (data.zona) {
+            await _triggerCascadeAndSelect('zona', data.linea);
+        }
+        if (data.linea) {
+            await _triggerCascadeAndSelect('linea', data.maquina);
+        }
+        if (data.maquina) {
+            await _triggerCascadeAndSelect('maquina', data.elemento);
+        }
+
+        // Set equipo final
+        setEquipo(tipo, id);
+        mToast('Equipo seleccionado', 'success');
+    } catch (e) {
+        mToast('Error al cargar equipo', 'error');
+    }
+}
+
+async function _triggerCascadeAndSelect(nivel, nextData) {
+    const val = parseInt(document.getElementById(nivel + 'Id').value);
+    if (!val) return;
+
+    const next = NEXT_LEVEL[nivel];
+    if (!next) return;
+
+    // Cargar siguiente nivel
+    const r = await fetch(`/movil/api/equipos?nivel=${next.nivel}&parent_id=${val}`);
+    const items = await r.json();
+    if (items.length) {
+        const sel = document.getElementById(next.selectId);
+        sel.innerHTML = `<option value="">— Selecciona ${LABELS[next.nivel] || next.nivel} —</option>`;
+        items.forEach(i => {
+            const opt = document.createElement('option');
+            opt.value = i.id;
+            opt.textContent = i.nombre + (i.codigo ? ` (${i.codigo})` : '');
+            sel.appendChild(opt);
+        });
+        document.getElementById(next.field).style.display = 'block';
+        // Seleccionar si tenemos dato del siguiente nivel
+        if (nextData) {
+            sel.value = nextData.id;
+        }
+    }
+}
+
+// ---- Init: pre-fill desde query params (viene de QR result) ----
+document.addEventListener('DOMContentLoaded', function() {
+    if (PREFILL_TIPO && PREFILL_ID) {
+        precargarEquipo(PREFILL_TIPO, PREFILL_ID);
+    }
+});
 </script>
 {% endblock %}

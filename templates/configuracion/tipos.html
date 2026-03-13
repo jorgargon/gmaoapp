@@ -1,0 +1,348 @@
+{% extends "base.html" %}
+
+{% block title %}Tipos de Intervención — Configuración{% endblock %}
+
+{% block content %}
+<div class="pageHeader">
+    <div style="display:flex; align-items:center; gap:12px;">
+        <a href="{{ url_for('configuracion.index') }}" class="btn btnSecondary btnSm">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <h2><i class="fas fa-tags"></i> Tipos de Intervención</h2>
+    </div>
+</div>
+
+<div class="filtersBar">
+    <div class="filterGroup">
+        <label class="checkLabel">
+            <input type="checkbox" id="tiposSoloActivos" checked onchange="cargarTiposIntervencion()">
+            <span>Solo activos</span>
+        </label>
+    </div>
+    {% if current_user and current_user.nivel == 'admin' %}
+    <div class="filterGroup" style="margin-left: auto;">
+        <button class="btn btnPrimary" onclick="mostrarFormularioTipo()">
+            <i class="fas fa-plus"></i> Nuevo Tipo
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<div class="tiposContainer">
+    <div id="tiposGrid">
+        <div class="table-responsive">
+            <table class="dataTable">
+                <thead>
+                    <tr>
+                        <th style="width: 50px;">Icono</th>
+                        <th>Nombre</th>
+                        <th>Código</th>
+                        <th>Descripción</th>
+                        <th>Orden</th>
+                        <th>Estado</th>
+                        <th style="width: 100px;">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tiposTableBody">
+                    <tr>
+                        <td colspan="7" class="text-center">
+                            <div class="loadingState"><i class="fas fa-spinner fa-spin"></i> Cargando tipos...</div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    let tiposData = [];
+    let iconosDisponibles = [];
+
+    async function cargarTiposIntervencion() {
+        try {
+            const soloActivos = document.getElementById('tiposSoloActivos').checked;
+            console.log('Cargando tipos...');
+            tiposData = await apiCall(`/api/tipos-intervencion?activo=${soloActivos}`);
+            console.log('Tipos cargados:', tiposData);
+            renderTipos();
+        } catch (error) {
+            console.error('Error cargando tipos:', error);
+            showToast('Error al cargar tipos', 'error');
+        }
+    }
+
+    function renderTipos() {
+        const container = document.getElementById('tiposTableBody');
+        if (!container) return; // Seguridad
+
+        if (tiposData.length === 0) {
+            container.innerHTML = '<tr><td colspan="7" class="emptyState"><i class="fas fa-tags"></i><p>No hay tipos de intervención</p></td></tr>';
+            return;
+        }
+
+        let html = '';
+        tiposData.forEach(t => {
+            html += `
+            <tr onclick="verTipo(${t.id})" style="cursor: pointer;">
+                <td class="text-center">
+                    <div class="tipoIcon" style="color: ${t.color}; font-size: 1.2em;">
+                        <i class="fas ${t.icono}"></i>
+                    </div>
+                </td>
+                <td><strong>${t.nombre}</strong></td>
+                <td><span class="text-muted small">${t.codigo}</span></td>
+                <td><span class="text-muted small">${t.descripcion || '-'}</span></td>
+                <td>${t.orden}</td>
+                <td><span class="tag ${t.activo ? 'tag-success' : 'tag-muted'}">${t.activo ? 'Activo' : 'Inactivo'}</span></td>
+                <td class="actionsCell">
+                    <button class="btnIcon" onclick="event.stopPropagation(); editarTipo(${t.id})" title="Editar">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btnIcon btnDanger" onclick="event.stopPropagation(); eliminarTipo(${t.id})" title="Eliminar">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    async function mostrarFormularioTipo(tipo = null) {
+        const esEdicion = tipo !== null;
+
+        // Cargar iconos disponibles
+        try {
+            iconosDisponibles = await apiCall('/api/iconos-disponibles');
+            // Si estamos editando, añadir el icono actual a la lista
+            if (esEdicion && tipo.icono) {
+                const iconoActual = { icono: tipo.icono, nombre: tipo.icono };
+                if (!iconosDisponibles.find(i => i.icono === tipo.icono)) {
+                    iconosDisponibles.unshift(iconoActual);
+                }
+            }
+        } catch (e) { iconosDisponibles = []; }
+
+        const iconosOptions = iconosDisponibles.map(i =>
+            `<option value="${i.icono}" ${tipo?.icono === i.icono ? 'selected' : ''}>${i.nombre}</option>`
+        ).join('');
+
+        const html = `
+        <form id="formTipo" onsubmit="event.preventDefault(); guardandoTipo ? null : guardarTipo(document.getElementById('tipoCodigo').value ? document.getElementById('tipoCodigo').value : null); return false;">
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Nombre *</label>
+                    <input type="text" id="tipoNombre" class="formControl" value="${tipo?.nombre || ''}"
+                           placeholder="Ej: Correctivo" required>
+                </div>
+                <div class="formGroup">
+                    <label>Código</label>
+                    <input type="text" id="tipoCodigo" class="formControl" value="${tipo?.codigo || ''}"
+                           placeholder="Se genera automáticamente" ${esEdicion ? 'readonly' : ''}>
+                </div>
+            </div>
+            <div class="formGroup">
+                <label>Descripción</label>
+                <textarea id="tipoDescripcion" class="formControl" rows="2">${tipo?.descripcion || ''}</textarea>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Icono *</label>
+                    <select id="tipoIcono" class="formControl" required onchange="previewIcono()">
+                        <option value="">Seleccionar icono...</option>
+                        ${iconosOptions}
+                    </select>
+                </div>
+                <div class="formGroup" style="flex: 0 0 60px;">
+                    <label>&nbsp;</label>
+                    <div id="iconoPreview" class="iconoPreview">
+                        ${tipo?.icono ? `<i class="fas ${tipo.icono}"></i>` : '<i class="fas fa-question"></i>'}
+                    </div>
+                </div>
+                <div class="formGroup">
+                    <label>Color</label>
+                    <input type="color" id="tipoColor" class="formControl formColorInput" value="${tipo?.color || '#1976d2'}">
+                </div>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Orden</label>
+                    <input type="number" id="tipoOrden" class="formControl" value="${tipo?.orden || 0}" min="0">
+                </div>
+                <div class="formGroup">
+                    <label>Estado</label>
+                    <select id="tipoActivo" class="formControl">
+                        <option value="true" ${tipo?.activo !== false ? 'selected' : ''}>Activo</option>
+                        <option value="false" ${tipo?.activo === false ? 'selected' : ''}>Inactivo</option>
+                    </select>
+                </div>
+            </div>
+        </form>
+    `;
+
+        const footer = `
+        <button class="btn btnSecondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn btnPrimary" onclick="guardarTipo(${tipo?.id || 'null'})">${esEdicion ? 'Guardar' : 'Crear Tipo'}</button>
+    `;
+
+        openModal(esEdicion ? 'Editar Tipo de Intervención' : 'Nuevo Tipo de Intervención', html, footer);
+    }
+
+    function previewIcono() {
+        const icono = document.getElementById('tipoIcono').value;
+        const color = document.getElementById('tipoColor').value;
+        document.getElementById('iconoPreview').innerHTML = icono ?
+            `<i class="fas ${icono}" style="color: ${color};"></i>` :
+            '<i class="fas fa-question"></i>';
+    }
+
+    async function guardarTipo(id) {
+        const data = {
+            nombre: document.getElementById('tipoNombre').value,
+            codigo: document.getElementById('tipoCodigo').value,
+            descripcion: document.getElementById('tipoDescripcion').value,
+            icono: document.getElementById('tipoIcono').value,
+            color: document.getElementById('tipoColor').value,
+            orden: parseInt(document.getElementById('tipoOrden').value) || 0,
+            activo: document.getElementById('tipoActivo').value === 'true'
+        };
+
+        if (!data.nombre || !data.icono) {
+            showToast('Completa los campos obligatorios', 'error');
+            return;
+        }
+
+        try {
+            if (id) {
+                await apiCall(`/api/tipo-intervencion/${id}`, 'PUT', data);
+                showToast('Tipo actualizado', 'success');
+            } else {
+                await apiCall('/api/tipo-intervencion', 'POST', data);
+                showToast('Tipo creado correctamente', 'success');
+            }
+            closeModal();
+            cargarTiposIntervencion();
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    async function verTipo(id) {
+        const t = await apiCall(`/api/tipo-intervencion/${id}`);
+
+        const html = `
+        <div class="tipoDetalle">
+            <div class="tipoDetalleHeader" style="background-color: ${t.color}20;">
+                <div class="tipoDetalleIcon" style="color: ${t.color};">
+                    <i class="fas ${t.icono} fa-3x"></i>
+                </div>
+                <div>
+                    <h3>${t.nombre}</h3>
+                    <span class="tipoCodigo">${t.codigo}</span>
+                </div>
+            </div>
+            <div class="infoGrid" style="margin-top: 20px;">
+                <div class="infoItem full">
+                    <label>Descripción</label>
+                    <span>${t.descripcion || '-'}</span>
+                </div>
+                <div class="infoItem">
+                    <label>Estado</label>
+                    <span class="tag ${t.activo ? 'tag-success' : 'tag-muted'}">${t.activo ? 'Activo' : 'Inactivo'}</span>
+                </div>
+                <div class="infoItem">
+                    <label>Orden</label>
+                    <span>${t.orden}</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+        const footer = `
+        <button class="btn btnOutline" onclick="closeModal(); editarTipo(${t.id})">
+            <i class="fas fa-edit"></i> Editar
+        </button>
+        <button class="btn btnSecondary" onclick="closeModal()">Cerrar</button>
+    `;
+
+        openModal(t.nombre, html, footer);
+    }
+
+    async function editarTipo(id) {
+        const tipo = await apiCall(`/api/tipo-intervencion/${id}`);
+        mostrarFormularioTipo(tipo);
+    }
+
+    async function eliminarTipo(id) {
+        const tipo = tiposData.find(t => t.id === id);
+        if (!confirm(`¿Eliminar el tipo "${tipo?.nombre}"?`)) return;
+
+        try {
+            const result = await apiCall(`/api/tipo-intervencion/${id}`, 'DELETE');
+            cargarTiposIntervencion();
+            showToast(result.mensaje, result.desactivado ? 'warning' : 'success');
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        cargarTiposIntervencion();
+    });
+</script>
+
+<style>
+    .configTabContent {
+        padding: 20px 0;
+    }
+
+    .tipoDetalle {
+        padding: 0;
+    }
+
+    .tipoDetalleHeader {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        padding: 24px;
+        border-radius: 12px;
+    }
+
+    .tipoDetalleIcon {
+        flex-shrink: 0;
+    }
+
+    .tipoDetalleHeader h3 {
+        margin: 0 0 4px 0;
+    }
+
+    .iconoPreview {
+        width: 50px;
+        height: 38px;
+        background: #f5f5f5;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+    }
+
+    .formColorInput {
+        height: 38px;
+        padding: 4px;
+        cursor: pointer;
+    }
+
+    .tag-success {
+        background: #e8f5e9 !important;
+        color: #2e7d32 !important;
+    }
+
+    .tag-muted {
+        background: #f5f5f5 !important;
+        color: #999 !important;
+    }
+</style>
+{% endblock %}

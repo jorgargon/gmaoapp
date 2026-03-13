@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}General — Configuración{% endblock %}
+
+{% block content %}
+<div class="pageHeader">
+    <div style="display:flex; align-items:center; gap:12px;">
+        <a href="{{ url_for('configuracion.index') }}" class="btn btnSecondary btnSm">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <h2><i class="fas fa-sliders-h"></i> Configuración General</h2>
+    </div>
+</div>
+
+<div id="configGeneralContainer" style="max-width: 600px;">
+    <p style="color: var(--text-muted); margin-bottom: 1.5rem; font-size: .93rem;">
+        <i class="fas fa-info-circle"></i> Ajustes globales de la aplicación. Los cambios se aplican de forma
+        inmediata.
+    </p>
+    <div id="configGeneralSettings">
+        <div class="loadingState"><i class="fas fa-spinner fa-spin"></i> Cargando configuración...</div>
+    </div>
+    <div style="margin-top: 1.5rem;">
+        <button class="btn btnPrimary" onclick="guardarConfigGeneral()">
+            <i class="fas fa-save"></i> Guardar Configuración
+        </button>
+    </div>
+</div>
+
+<script>
+    let configData = [];
+
+    async function cargarConfigGeneral() {
+        try {
+            configData = await apiCall('/api/config-general');
+            renderConfigGeneral();
+        } catch (error) {
+            showToast('Error al cargar configuración: ' + error.message, 'error');
+        }
+    }
+
+    function renderConfigGeneral() {
+        const container = document.getElementById('configGeneralSettings');
+        if (!container) return;
+
+        const etiquetas = {
+            'tecnico_puede_cerrar': 'El técnico puede hacer el cierre definitivo de la OT',
+            'turno_planta': 'Turno de la planta (Cálculo de KPIs)'
+        };
+
+        const turnosOpciones = [
+            { val: '8/5', txt: '8h x 5 días (40h/sem)' },
+            { val: '8/6', txt: '8h x 6 días (48h/sem)' },
+            { val: '10/5', txt: '10h x 5 días (50h/sem)' },
+            { val: '12/5', txt: '12h x 5 días (60h/sem)' },
+            { val: '16/5', txt: '16h x 5 días (80h/sem)' },
+            { val: '16/6', txt: '16h x 6 días (96h/sem)' },
+            { val: '12/7', txt: '12h x 7 días (84h/sem)' },
+            { val: '24/5', txt: '24h x 5 días (120h/sem)' },
+            { val: '24/6', txt: '24h x 6 días (144h/sem)' },
+            { val: '24/7', txt: '24h x 7 días (Continuo - 168h/sem)' }
+        ];
+
+        let html = '';
+        configData.forEach(item => {
+            const label = etiquetas[item.clave] || item.clave;
+
+            if (item.tipo === 'booleano') {
+                const checked = item.valor === 'true' ? 'checked' : '';
+                html += `
+                <div class="formGroup" style="display:flex; align-items:center; gap: 12px; margin-bottom: 1.2rem;">
+                    <label class="switch" style="position:relative; display:inline-block; width:44px; height:24px; flex-shrink:0;">
+                        <input type="checkbox" id="config_${item.clave}" ${checked}
+                               style="opacity:0; width:0; height:0;">
+                        <span class="sliderToggle" data-clave="${item.clave}"
+                              onclick="toggleConfig('${item.clave}')"
+                              style="position:absolute; cursor:pointer; top:0; left:0; right:0; bottom:0;
+                                     background:${item.valor === 'true' ? 'var(--primary)' : '#ccc'};
+                                     border-radius:24px; transition:.3s;">
+                            <span style="position:absolute; content:''; height:18px; width:18px; left:3px; bottom:3px;
+                                         background:white; border-radius:50%; transition:.3s;
+                                         transform: translateX(${item.valor === 'true' ? '20px' : '0'})"></span>
+                        </span>
+                    </label>
+                    <div style="flex: 1;">
+                        <strong>${label}</strong>
+                        ${item.descripcion ? `<div style="color:var(--text-muted); font-size:.85rem; margin-top:4px;">${item.descripcion}</div>` : ''}
+                    </div>
+                </div>`;
+            } else if (item.tipo === 'texto' && item.clave === 'turno_planta') {
+                const optionsHtml = turnosOpciones.map(opt =>
+                    `<option value="${opt.val}" ${item.valor === opt.val ? 'selected' : ''}>${opt.txt}</option>`
+                ).join('');
+
+                html += `
+                <div class="formGroup" style="margin-bottom: 1.2rem; background: var(--surface); padding: 15px; border-radius: 8px; border: 1px solid var(--border);">
+                    <div style="margin-bottom: 10px;">
+                        <strong><i class="fas fa-clock" style="color: var(--primary)"></i> ${label}</strong>
+                        ${item.descripcion ? `<div style="color:var(--text-muted); font-size:.85rem; margin-top:4px;">${item.descripcion}</div>` : ''}
+                    </div>
+                    <select id="config_${item.clave}" class="formControl" style="max-width: 300px;" onchange="updateConfigText('${item.clave}', this.value)">
+                        ${optionsHtml}
+                    </select>
+                </div>`;
+            } else if (item.tipo === 'texto') {
+                html += `
+                <div class="formGroup" style="margin-bottom: 1.2rem;">
+                    <label><strong>${label}</strong></label>
+                    ${item.descripcion ? `<div style="color:var(--text-muted); font-size:.85rem; margin-bottom: 8px;">${item.descripcion}</div>` : ''}
+                    <input type="text" id="config_${item.clave}" class="formControl" value="${item.valor}" onchange="updateConfigText('${item.clave}', this.value)">
+                </div>`;
+            }
+        });
+
+        if (!html) html = '<p class="emptyState small">Sin configuraciones disponibles</p>';
+        container.innerHTML = html;
+    }
+
+    function toggleConfig(clave) {
+        const item = configData.find(i => i.clave === clave);
+        if (!item) return;
+        item.valor = item.valor === 'true' ? 'false' : 'true';
+        renderConfigGeneral();
+    }
+
+    function updateConfigText(clave, valor) {
+        const item = configData.find(i => i.clave === clave);
+        if (!item) return;
+        item.valor = valor;
+    }
+
+    async function guardarConfigGeneral() {
+        const payload = configData.map(item => ({ clave: item.clave, valor: item.valor }));
+        try {
+            await apiCall('/api/config-general', 'PUT', payload);
+            showToast('Configuración guardada correctamente', 'success');
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        cargarConfigGeneral();
+    });
+</script>
+
+<style>
+    .configTabContent {
+        padding: 20px 0;
+    }
+</style>
+{% endblock %}

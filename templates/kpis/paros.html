@@ -10,18 +10,47 @@
     background: #fff;
     border: 1px solid #e0e0e0;
     border-radius: 10px;
-    padding: 1rem 1.25rem;
+    padding: 0.75rem 1.25rem;
+    margin-bottom: 0.75rem;
+}
+.parosFiltersRow {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.75rem 1.25rem;
+    gap: 0.6rem 0.85rem;
     align-items: flex-end;
-    margin-bottom: 1.5rem;
+}
+.parosFiltersRow + .parosFiltersRow {
+    margin-top: 0.6rem;
+    padding-top: 0.6rem;
+    border-top: 1px solid #f0f0f0;
 }
 .parosFilters .fg { display: flex; flex-direction: column; gap: 4px; }
 .parosFilters label { font-size: 0.78rem; color: #666; font-weight: 600; }
 .parosFilters input[type=date],
-.parosFilters select { padding: 6px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.85rem; background:#fff; }
-.parosFilters select[multiple] { height: 72px; }
+.parosFilters select {
+    padding: 5px 8px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    background: #fff;
+    min-width: 130px;
+}
+
+/* Badge de ámbito */
+.parosAmbitoBadge {
+    background: #E3F2FD;
+    border: 1px solid #90CAF9;
+    border-radius: 8px;
+    padding: 0.45rem 1rem;
+    font-size: 0.8rem;
+    color: #1565C0;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.parosAmbitoBadge i { color: #90CAF9; }
 
 .parosSection {
     background: #fff;
@@ -45,18 +74,18 @@
 .parosSectionBody { padding: 1.25rem; }
 
 /* ── Tablas ─────────────────────────────────────────────────── */
-.parosTable { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.parosTable { width: 100%; border-collapse: collapse; font-size: 0.73rem; }
 .parosTable th {
     background: #1565C0;
     color: #fff;
-    padding: 7px 10px;
+    padding: 5px 6px;
     text-align: center;
     font-weight: 600;
     white-space: nowrap;
 }
 .parosTable th.left { text-align: left; }
 .parosTable td {
-    padding: 6px 10px;
+    padding: 4px 6px;
     border-bottom: 1px solid #f0f0f0;
     text-align: right;
     white-space: nowrap;
@@ -69,9 +98,16 @@
 }
 .parosTable td.rowDef {
     text-align: left;
-    font-size: 0.75rem;
-    color: #888;
+    font-size: 0.71rem;
+    color: #999;
     font-style: italic;
+    max-width: 200px;
+    white-space: normal;
+}
+/* Columna definición: oculta en pantallas pequeñas */
+.colDef { display: table-cell; }
+@media (max-width: 1400px) {
+    .colDef { display: none; }
 }
 .parosTable tr:hover td { background: #f5f9ff; }
 .parosTable tr.deltaRow td { color: #555; font-style: italic; }
@@ -79,6 +115,20 @@
 .parosTable .nd { color: #bbb; }
 .parosTable .pos { color: #2E7D32; font-weight: 600; }
 .parosTable .neg { color: #C62828; font-weight: 600; }
+
+/* Toggle definición */
+.btnDef {
+    padding: 3px 8px;
+    background: #F0F4FF;
+    color: #1565C0;
+    border: 1px solid #90CAF9;
+    border-radius: 4px;
+    font-size: 0.72rem;
+    cursor: pointer;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+.btnDef:hover { background: #DDEEFF; }
 
 /* ── Tendencia ──────────────────────────────────────────────── */
 .tend { font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
@@ -169,6 +219,18 @@
     white-space: nowrap;
 }
 .btnExcel:hover { background: #C8E6C9; }
+.btnPdf {
+    padding: 6px 14px;
+    background: #FBE9E7;
+    color: #BF360C;
+    border: 1px solid #FFAB91;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.btnPdf:hover { background: #FFCCBC; }
 </style>
 {% endblock %}
 
@@ -188,49 +250,78 @@
 
 <!-- ══ FILTROS ════════════════════════════════════════════════════════════════ -->
 <div class="parosFilters">
-    <div class="fg">
-        <label>Fecha inicio</label>
-        <input type="date" id="fInicio">
+    <!-- Fila 1: Fechas y agrupación -->
+    <div class="parosFiltersRow">
+        <div class="fg">
+            <label>Fecha inicio</label>
+            <input type="date" id="fInicio">
+        </div>
+        <div class="fg">
+            <label>Fecha fin</label>
+            <input type="date" id="fFin">
+        </div>
+        <div class="fg">
+            <button class="btn12m" onclick="setUltimos12()"><i class="fas fa-calendar-alt"></i> Últimos 12 m.</button>
+        </div>
+        <div class="fg">
+            <label>Agrupación</label>
+            <select id="agrupacion">
+                <option value="mensual">Mensual</option>
+                <option value="anual">Anual</option>
+            </select>
+        </div>
+        <div class="fg" style="margin-left:auto;display:flex;flex-direction:row;gap:0.5rem;align-items:flex-end;">
+            <button class="btnApply" onclick="cargarDatos()"><i class="fas fa-play"></i> Aplicar</button>
+            <button class="btnPdf" onclick="exportarPDF()"><i class="fas fa-file-pdf"></i> PDF</button>
+            <button class="btnExcel" onclick="exportarExcel()"><i class="fas fa-file-excel"></i> Excel</button>
+        </div>
     </div>
-    <div class="fg">
-        <label>Fecha fin</label>
-        <input type="date" id="fFin">
+    <!-- Fila 2: Selección de equipos -->
+    <div class="parosFiltersRow">
+        <div class="fg">
+            <label>Planta</label>
+            <select id="selPlanta" onchange="onChangePlanta()">
+                <option value="">— Todas las plantas —</option>
+                {% for p in plantas %}
+                <option value="{{ p.id }}">{{ p.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="fg">
+            <label>Zona</label>
+            <select id="selZona" onchange="onChangeZona()">
+                <option value="">— Todas las zonas —</option>
+            </select>
+        </div>
+        <div class="fg">
+            <label>Línea</label>
+            <select id="selLinea" onchange="onChangeLinea()">
+                <option value="">— Todas las líneas —</option>
+            </select>
+        </div>
+        <div class="fg">
+            <label>Máquina</label>
+            <select id="selMaquina">
+                <option value="">— Todas las máquinas —</option>
+            </select>
+        </div>
     </div>
-    <div class="fg">
-        <button class="btn12m" onclick="setUltimos12()"><i class="fas fa-calendar-alt"></i> Últimos 12 meses</button>
-    </div>
-    <div class="fg">
-        <label>Agrupación</label>
-        <select id="agrupacion">
-            <option value="mensual">Mensual</option>
-            <option value="anual">Anual</option>
-        </select>
-    </div>
-    <div class="fg">
-        <label>Línea</label>
-        <select id="selLinea" multiple>
-            {% for l in lineas %}
-            <option value="{{ l.id }}">{{ l.nombre }}</option>
-            {% endfor %}
-        </select>
-    </div>
-    <div class="fg">
-        <label>Máquina</label>
-        <select id="selMaquina" multiple>
-            {% for m in maquinas %}
-            <option value="{{ m.id }}" data-linea="{{ m.linea_id }}">{{ m.nombre }}</option>
-            {% endfor %}
-        </select>
-    </div>
-    <div class="fg">
-        <button class="btnApply" onclick="cargarDatos()"><i class="fas fa-play"></i> Aplicar</button>
-    </div>
+</div>
+
+<!-- Badge de ámbito -->
+<div class="parosAmbitoBadge">
+    <i class="fas fa-map-marker-alt"></i>
+    <span>Ámbito: </span>
+    <span id="ambitoLabel">Toda la planta</span>
 </div>
 
 <!-- ══ SECCIÓN 1 — INDICADORES GLOBALES ══════════════════════════════════════ -->
 <div class="parosSection">
     <div class="parosSectionHdr">
-        <i class="fas fa-globe"></i> Sección 1 — Indicadores Globales de Planta
+        <i class="fas fa-globe"></i> Sección 1 — Indicadores Globales
+        <button class="btnDef" id="btnToggleDef" onclick="toggleDef()" title="Mostrar/ocultar columna de definición">
+            <i class="fas fa-info-circle"></i> Definición
+        </button>
     </div>
     <div class="parosSectionBody">
         <div id="tablaGlobal"><div class="emptyMsg">Aplica los filtros para ver los indicadores.</div></div>
@@ -268,11 +359,11 @@
         <div id="tablaGrupo"><div class="emptyMsg">Aplica los filtros para ver los indicadores.</div></div>
         <div class="chartsRow cols2" id="chartsGrupo" style="display:none;">
             <div class="chartCard">
-                <div class="chartCardHdr"><i class="fas fa-bars"></i> G4 — Disponibilidad por línea/máquina (más críticos arriba)</div>
+                <div class="chartCardHdr"><i class="fas fa-bars"></i> G5 — Disponibilidad por línea/máquina (más críticos arriba)</div>
                 <div class="chartCardBody"><canvas id="g4" height="280"></canvas></div>
             </div>
             <div class="chartCard">
-                <div class="chartCardHdr"><i class="fas fa-chart-bar"></i> G5 — Nº Paros por línea/máquina y periodo</div>
+                <div class="chartCardHdr"><i class="fas fa-chart-bar"></i> G6 — Nº Paros por línea/máquina y periodo</div>
                 <div class="chartCardBody"><canvas id="g5" height="280"></canvas></div>
             </div>
         </div>
@@ -288,7 +379,7 @@
         <div id="tablaTop10"><div class="emptyMsg">Aplica los filtros para ver el ranking.</div></div>
         <div class="chartsRow cols1" id="chartsTop" style="display:none;">
             <div class="chartCard">
-                <div class="chartCardHdr"><i class="fas fa-chart-bar"></i> G6 — Pareto de Paros por Equipo</div>
+                <div class="chartCardHdr"><i class="fas fa-chart-bar"></i> G7 — Pareto de Paros por Equipo</div>
                 <div class="chartCardBody"><canvas id="g6" height="200"></canvas></div>
             </div>
         </div>
@@ -297,11 +388,8 @@
 
 <!-- ══ SECCIÓN 4 — BENCHMARKING ══════════════════════════════════════════════ -->
 <div class="parosSection">
-    <div class="parosSectionHdr" style="justify-content:space-between;">
-        <span><i class="fas fa-medal"></i> Sección 4 — Resumen Ejecutivo / Benchmarking Clase Mundial</span>
-        <button class="btnExcel" id="btnExcel" onclick="exportarExcel()">
-            <i class="fas fa-file-excel"></i> Exportar a Excel
-        </button>
+    <div class="parosSectionHdr">
+        <i class="fas fa-medal"></i> Sección 4 — Resumen Ejecutivo / Benchmarking Clase Mundial
     </div>
     <div class="parosSectionBody">
         <div id="tablaBench"><div class="emptyMsg">Aplica los filtros para ver el benchmarking.</div></div>
@@ -339,6 +427,19 @@ function estadoIcon(e) {
 }
 
 // =============================================================================
+// TOGGLE COLUMNA DEFINICIÓN
+// =============================================================================
+let _defVisible = false;
+function toggleDef() {
+    _defVisible = !_defVisible;
+    document.querySelectorAll('.colDef').forEach(el => {
+        el.style.display = _defVisible ? 'table-cell' : '';
+    });
+    const btn = document.getElementById('btnToggleDef');
+    btn.style.background = _defVisible ? '#BBDEFB' : '';
+}
+
+// =============================================================================
 // FILTROS — INICIALIZACIÓN
 // =============================================================================
 (function initFiltros() {
@@ -347,9 +448,6 @@ function estadoIcon(e) {
     hace12.setFullYear(hoy.getFullYear() - 1);
     document.getElementById('fFin').value   = hoy.toISOString().slice(0, 10);
     document.getElementById('fInicio').value = hace12.toISOString().slice(0, 10);
-
-    // Filtrar máquinas según línea seleccionada
-    document.getElementById('selLinea').addEventListener('change', filtrarMaquinasPorLinea);
 })();
 
 function setUltimos12() {
@@ -360,15 +458,82 @@ function setUltimos12() {
     document.getElementById('fInicio').value = hace12.toISOString().slice(0, 10);
 }
 
-function filtrarMaquinasPorLinea() {
-    const selLinea = document.getElementById('selLinea');
-    const selMaq   = document.getElementById('selMaquina');
-    const lineasSel = Array.from(selLinea.selectedOptions).map(o => o.value);
-    Array.from(selMaq.options).forEach(opt => {
-        opt.style.display = (lineasSel.length === 0 || lineasSel.includes(opt.dataset.linea)) ? '' : 'none';
-        if (opt.style.display === 'none') opt.selected = false;
+// =============================================================================
+// FILTROS EN CASCADA
+// =============================================================================
+
+function _poblarSelect(selectId, items, valKey, labelKey, placeholder) {
+    const sel = document.getElementById(selectId);
+    sel.innerHTML = `<option value="">${placeholder}</option>`;
+    items.forEach(item => {
+        const opt = document.createElement('option');
+        opt.value = item[valKey];
+        opt.textContent = item[labelKey];
+        sel.appendChild(opt);
     });
 }
+
+function _resetSelect(selectId, placeholder) {
+    const sel = document.getElementById(selectId);
+    sel.innerHTML = `<option value="">${placeholder}</option>`;
+}
+
+function onChangePlanta() {
+    const pid = document.getElementById('selPlanta').value;
+    _resetSelect('selZona', '— Todas las zonas —');
+    _resetSelect('selLinea', '— Todas las líneas —');
+    _resetSelect('selMaquina', '— Todas las máquinas —');
+    actualizarAmbitoBadge();
+    if (!pid) return;
+    fetch(`/kpis/paros/api/zonas?planta=${pid}`)
+        .then(r => r.json())
+        .then(zonas => _poblarSelect('selZona', zonas, 'id', 'nombre', '— Todas las zonas —'));
+}
+
+function onChangeZona() {
+    const zid = document.getElementById('selZona').value;
+    _resetSelect('selLinea', '— Todas las líneas —');
+    _resetSelect('selMaquina', '— Todas las máquinas —');
+    actualizarAmbitoBadge();
+    if (!zid) {
+        // Si hay planta pero no zona, recargar zonas de esa planta
+        return;
+    }
+    fetch(`/kpis/paros/api/lineas?zona=${zid}`)
+        .then(r => r.json())
+        .then(lineas => _poblarSelect('selLinea', lineas, 'id', 'nombre', '— Todas las líneas —'));
+}
+
+function onChangeLinea() {
+    const lid = document.getElementById('selLinea').value;
+    _resetSelect('selMaquina', '— Todas las máquinas —');
+    actualizarAmbitoBadge();
+    if (!lid) return;
+    fetch(`/kpis/paros/api/maquinas?linea=${lid}`)
+        .then(r => r.json())
+        .then(maquinas => _poblarSelect('selMaquina', maquinas, 'id', 'nombre', '— Todas las máquinas —'));
+}
+
+function actualizarAmbitoBadge() {
+    const planta  = document.getElementById('selPlanta');
+    const zona    = document.getElementById('selZona');
+    const linea   = document.getElementById('selLinea');
+    const maquina = document.getElementById('selMaquina');
+
+    let label = 'Toda la planta';
+    if (maquina.value && maquina.options[maquina.selectedIndex]) {
+        label = `Máquina: ${maquina.options[maquina.selectedIndex].text}`;
+    } else if (linea.value && linea.options[linea.selectedIndex]) {
+        label = `Línea: ${linea.options[linea.selectedIndex].text}`;
+    } else if (zona.value && zona.options[zona.selectedIndex]) {
+        label = `Zona: ${zona.options[zona.selectedIndex].text}`;
+    } else if (planta.value && planta.options[planta.selectedIndex]) {
+        label = `Planta: ${planta.options[planta.selectedIndex].text}`;
+    }
+    document.getElementById('ambitoLabel').textContent = label;
+}
+
+document.getElementById('selMaquina').addEventListener('change', actualizarAmbitoBadge);
 
 // =============================================================================
 // CARGA DE DATOS
@@ -378,12 +543,19 @@ function buildParams() {
     p.set('fecha_inicio', document.getElementById('fInicio').value);
     p.set('fecha_fin',    document.getElementById('fFin').value);
     p.set('agrupacion',   document.getElementById('agrupacion').value);
-    Array.from(document.getElementById('selLinea').selectedOptions).forEach(o => p.append('linea', o.value));
-    Array.from(document.getElementById('selMaquina').selectedOptions).forEach(o => p.append('maquina', o.value));
+    const planta  = document.getElementById('selPlanta').value;
+    const zona    = document.getElementById('selZona').value;
+    const linea   = document.getElementById('selLinea').value;
+    const maquina = document.getElementById('selMaquina').value;
+    if (planta)  p.append('planta',  planta);
+    if (zona)    p.append('zona',    zona);
+    if (linea)   p.append('linea',   linea);
+    if (maquina) p.append('maquina', maquina);
     return p;
 }
 
 function cargarDatos() {
+    actualizarAmbitoBadge();
     const overlay = document.getElementById('loadingOverlay');
     overlay.classList.add('visible');
     const params = buildParams();
@@ -391,7 +563,6 @@ function cargarDatos() {
         .then(r => r.json())
         .then(datos => {
             overlay.classList.remove('visible');
-            // Mostrar turno activo en cabecera
             const turno = (datos.filtros_aplicados || {}).turno_planta || '—';
             document.getElementById('turnoInfoLabel').textContent = turno;
             renderGlobal(datos);
@@ -442,14 +613,14 @@ function renderGlobal(datos) {
     }
 
     let html = '<div style="overflow-x:auto"><table class="parosTable"><thead><tr>';
-    html += '<th class="left" style="min-width:160px">Indicador</th>';
-    html += '<th class="left" style="min-width:200px;font-weight:400;font-style:italic;font-size:0.75rem;color:#ccc">Definición</th>';
-    periodos.forEach(p => { html += `<th>${p}</th>`; });
+    html += '<th class="left" style="min-width:120px">Indicador</th>';
+    html += '<th class="left colDef" style="min-width:150px;font-weight:400;font-style:italic;font-size:0.71rem;color:#ccc">Definición</th>';
+    periodos.forEach(p => { html += `<th style="min-width:62px">${p}</th>`; });
     html += '</tr></thead><tbody>';
 
     FILAS_GLOBAL.forEach(fila => {
         const rowCls = fila.delta ? ' class="deltaRow"' : '';
-        html += `<tr${rowCls}><td class="rowLabel">${fila.label}</td><td class="rowDef">${fila.def}</td>`;
+        html += `<tr${rowCls}><td class="rowLabel">${fila.label}</td><td class="rowDef colDef">${fila.def}</td>`;
         global.forEach(p => { html += `<td>${fila.fmt(p[fila.campo])}</td>`; });
         html += '</tr>';
     });
@@ -457,6 +628,11 @@ function renderGlobal(datos) {
     html += '</tbody></table></div>';
     document.getElementById('tablaGlobal').innerHTML = html;
     document.getElementById('chartsGlobal').style.display = '';
+
+    // Aplicar visibilidad de columna definición según estado actual
+    if (!_defVisible) {
+        document.querySelectorAll('.colDef').forEach(el => { el.style.display = ''; });
+    }
 
     renderG1(periodos, global);
     renderG2(periodos, global);
@@ -589,12 +765,11 @@ function renderGrupo(datos) {
     TABLAS_GRUPO.forEach(tabla => {
         html += `<h4 style="font-size:0.8rem;text-transform:uppercase;letter-spacing:.06em;color:#888;margin:1.25rem 0 .5rem">${tabla.label} por ${tituloCol}</h4>`;
         html += '<div style="overflow-x:auto"><table class="parosTable"><thead><tr>';
-        html += `<th class="left" style="min-width:160px">${tituloCol}</th>`;
-        periodos.forEach(p => html += `<th>${p}</th>`);
+        html += `<th class="left" style="min-width:120px">${tituloCol}</th>`;
+        periodos.forEach(p => html += `<th style="min-width:62px">${p}</th>`);
         if (tabla.tendKey) html += '<th>Tendencia</th>';
         html += '</tr></thead><tbody>';
 
-        // Totales por columna
         const totales = periodos.map(() => 0);
 
         grupos.forEach(g => {
@@ -627,14 +802,13 @@ function renderGrupo(datos) {
 
 function renderG4(grupos, periodos) {
     _destroyChart('g4');
-    // Disponibilidad del último periodo, ordenada de menor a mayor (críticos arriba)
     const ultimo_idx = periodos.length - 1;
     const data = grupos
         .map(g => ({
             nombre: g.nombre,
             disp:   g.periodos[ultimo_idx] ? (g.periodos[ultimo_idx].disp_pct || 0) : 0,
         }))
-        .sort((a, b) => a.disp - b.disp);  // menor primero = más crítico arriba en horizontal
+        .sort((a, b) => a.disp - b.disp);
 
     const ctx = document.getElementById('g4').getContext('2d');
     _charts['g4'] = new Chart(ctx, {
@@ -668,7 +842,6 @@ function renderG4(grupos, periodos) {
 
 function renderG5(grupos, periodos) {
     _destroyChart('g5');
-    // Barras de Nº Paros: periodos en X, un dataset por grupo (máx 8 grupos)
     const MAX_GRUPOS = 8;
     const gruposSel = grupos.slice(0, MAX_GRUPOS);
     const COLORES   = ['#1565C0','#C62828','#2E7D32','#E65100','#6A1B9A','#00838F','#F57F17','#37474F'];
@@ -710,7 +883,7 @@ function renderTop10(datos) {
     }
 
     let html = '<div style="overflow-x:auto"><table class="parosTable"><thead><tr>';
-    html += '<th class="left" style="min-width:200px">Equipo (Línea — Máquina)</th>';
+    html += '<th class="left" style="min-width:180px">Equipo (Línea — Máquina)</th>';
     html += '<th>Nº Paros</th><th>% del Total</th><th>% Acumulado</th><th>Horas de Paro</th>';
     html += '</tr></thead><tbody>';
 
@@ -811,11 +984,65 @@ function renderBench(datos) {
 }
 
 // =============================================================================
-// EXPORTAR EXCEL
+// EXPORTAR EXCEL Y PDF
 // =============================================================================
 function exportarExcel() {
     const params = buildParams();
     window.location.href = `/kpis/paros/datos/excel?${params}`;
+}
+
+async function exportarPDF() {
+    const params = buildParams();
+
+    // Capturar todas las gráficas renderizadas como PNG base64
+    const CHART_IDS = ['g1', 'g1b', 'g2', 'g3', 'g4', 'g5', 'g6'];
+    const charts = {};
+    CHART_IDS.forEach(id => {
+        const canvas = document.getElementById(id);
+        if (canvas && _charts[id]) {
+            // Fondo blanco explícito (Chart.js renderiza sobre transparente)
+            const offscreen = document.createElement('canvas');
+            offscreen.width  = canvas.width;
+            offscreen.height = canvas.height;
+            const ctx2 = offscreen.getContext('2d');
+            ctx2.fillStyle = '#ffffff';
+            ctx2.fillRect(0, 0, offscreen.width, offscreen.height);
+            ctx2.drawImage(canvas, 0, 0);
+            charts[id] = offscreen.toDataURL('image/png');
+        } else {
+            console.warn(`PDF: gráfica '${id}' no disponible (canvas=${!!canvas}, chart=${!!_charts[id]})`);
+        }
+    });
+    console.log(`PDF: ${Object.keys(charts).length} gráficas capturadas:`, Object.keys(charts));
+
+    // Mostrar overlay de carga
+    const overlay = document.getElementById('loadingOverlay');
+    overlay.classList.add('visible');
+
+    try {
+        const resp = await fetch(`/kpis/paros/datos/pdf?${params}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ charts }),
+        });
+
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+        const blob = await resp.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url;
+        a.download = `kpi_paros_${document.getElementById('fInicio').value}_${document.getElementById('fFin').value}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    } catch (err) {
+        console.error(err);
+        alert('Error al generar el PDF. Revisa la consola.');
+    } finally {
+        overlay.classList.remove('visible');
+    }
 }
 </script>
 {% endblock %}

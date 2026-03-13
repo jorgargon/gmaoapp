@@ -5,26 +5,41 @@
     <h2><i class="fas fa-cog"></i> Configuración</h2>
 </div>
 
-<!-- Pestañas de Configuración -->
-<div class="configTabs">
-    <button class="configTabBtn active" onclick="switchConfigTab(event, 'tipos')">
-        <i class="fas fa-tags"></i> Tipos de Intervención
-    </button>
-    <button class="configTabBtn" onclick="switchConfigTab(event, 'gamas')">
-        <i class="fas fa-clipboard-list"></i> Gamas de Mantenimiento
-    </button>
-    {% if current_user and current_user.nivel == 'admin' %}
-    <button class="configTabBtn" onclick="switchConfigTab(event, 'general')">
-        <i class="fas fa-sliders-h"></i> General
-    </button>
-    <button class="configTabBtn" onclick="switchConfigTab(event, 'usuarios')">
-        <i class="fas fa-users"></i> Usuarios
-    </button>
-    {% endif %}
+<!-- Tarjetas de navegación de Configuración -->
+<div class="configCards">
+    <div class="configCard active" onclick="switchConfigTab(event, 'tipos')" data-tab="tipos">
+        <span class="configCardIcon"><i class="fas fa-tags"></i></span>
+        <span class="configCardTitle">Tipos de Intervención</span>
+        <span class="configCardDesc">Gestiona los tipos de intervención correctiva</span>
+    </div>
+    <div class="configCard" onclick="switchConfigTab(event, 'gamas')" data-tab="gamas">
+        <span class="configCardIcon"><i class="fas fa-clipboard-list"></i></span>
+        <span class="configCardTitle">Gamas de Mantenimiento</span>
+        <span class="configCardDesc">Configura las gamas y planes de mantenimiento</span>
+    </div>
     {% if current_user and current_user.nivel != 'tecnico' %}
-    <button class="configTabBtn" onclick="switchConfigTab(event, 'tecnicos')">
-        <i class="fas fa-user-cog"></i> Técnicos
-    </button>
+    <div class="configCard" onclick="switchConfigTab(event, 'tecnicos')" data-tab="tecnicos">
+        <span class="configCardIcon"><i class="fas fa-user-cog"></i></span>
+        <span class="configCardTitle">Técnicos</span>
+        <span class="configCardDesc">Administra el equipo de técnicos de mantenimiento</span>
+    </div>
+    {% endif %}
+    {% if current_user and current_user.nivel == 'admin' %}
+    <div class="configCard" onclick="switchConfigTab(event, 'usuarios')" data-tab="usuarios">
+        <span class="configCardIcon"><i class="fas fa-users"></i></span>
+        <span class="configCardTitle">Usuarios</span>
+        <span class="configCardDesc">Gestiona cuentas de acceso y niveles de permiso</span>
+    </div>
+    <div class="configCard" onclick="switchConfigTab(event, 'general')" data-tab="general">
+        <span class="configCardIcon"><i class="fas fa-sliders-h"></i></span>
+        <span class="configCardTitle">General</span>
+        <span class="configCardDesc">Parámetros generales del sistema GMAO</span>
+    </div>
+    <div class="configCard" onclick="window.location.href='{{ url_for('importacion.index') }}'">
+        <span class="configCardIcon"><i class="fas fa-file-import"></i></span>
+        <span class="configCardTitle">Importación masiva</span>
+        <span class="configCardDesc">Carga inicial de activos, gamas, histórico y más</span>
+    </div>
     {% endif %}
 </div>
 
@@ -236,15 +251,12 @@
     // =========================================================================
 
     function switchConfigTab(event, tabName) {
-        // Remover clase active de todos los botones y contenidos
-        document.querySelectorAll('.configTabBtn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.configCard').forEach(c => c.classList.remove('active'));
         document.querySelectorAll('.configTabContent').forEach(content => content.style.display = 'none');
 
-        // Activar el botón y contenido seleccionado
         event.currentTarget.classList.add('active');
         document.getElementById(`config-${tabName}`).style.display = 'block';
 
-        // Cargar datos específicos si es necesario
         if (tabName === 'tipos') {
             cargarTiposIntervencion();
         } else if (tabName === 'gamas') {
@@ -258,15 +270,7 @@
         }
     }
 
-    // Activar la primera pestaña por defecto (Tipos de Intervención) y cargar datos
     document.addEventListener('DOMContentLoaded', function () {
-        console.log('DOM cargado, iniciando configuración...');
-        // Asegurar que la primera pestaña esté activa
-        const firstTab = document.querySelector('.configTabBtn');
-        if (firstTab && !firstTab.classList.contains('active')) {
-            firstTab.classList.add('active');
-            document.getElementById('config-tipos').style.display = 'block';
-        }
         cargarTiposIntervencion();
     });
 
@@ -1629,35 +1633,65 @@
 
 <style>
     /* Estilos Específicos para Configuración */
-    .configTabs {
-        display: flex;
-        gap: 10px;
+    .configCards {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 16px;
         margin-bottom: 2rem;
-        border-bottom: 2px solid var(--border-color);
-        padding-bottom: 10px;
     }
 
-    .configTabBtn {
-        background: none;
-        border: none;
-        padding: 10px 20px;
-        font-size: 1rem;
-        color: var(--text-secondary);
+    .configCard {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 24px 16px;
+        background: white;
+        border: 2px solid var(--border-color);
+        border-radius: 12px;
         cursor: pointer;
-        border-radius: var(--radius-md);
         transition: all 0.2s;
+        text-align: center;
     }
 
-    .configTabBtn:hover {
-        background-color: var(--bg-secondary);
+    .configCard:hover {
+        border-color: #1976d2;
+        box-shadow: 0 4px 12px rgba(25, 118, 210, 0.12);
+        transform: translateY(-2px);
+    }
+
+    .configCard.active {
+        border-color: #1976d2;
+        background: #f0f7ff;
+    }
+
+    .configCardIcon {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        background: #e3f2fd;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.4rem;
+        color: #1976d2;
+    }
+
+    .configCard.active .configCardIcon {
+        background: #1976d2;
+        color: white;
+    }
+
+    .configCardTitle {
+        font-weight: 600;
+        font-size: 0.92rem;
         color: var(--text-primary);
     }
 
-    .configTabBtn.active {
-        color: #1976d2;
-        border-bottom-color: #1976d2;
-        font-weight: 600;
-        background-color: #f0f7ff;
+    .configCardDesc {
+        font-size: 0.78rem;
+        color: var(--text-secondary);
+        line-height: 1.3;
     }
 
     .configTabContent {

@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+
+{% block title %}Usuarios — Configuración{% endblock %}
+
+{% block content %}
+<div class="pageHeader">
+    <div style="display:flex; align-items:center; gap:12px;">
+        <a href="{{ url_for('configuracion.index') }}" class="btn btnSecondary btnSm">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <h2><i class="fas fa-users"></i> Usuarios</h2>
+    </div>
+</div>
+
+<div class="filtersBar">
+    <div class="filterGroup">
+        <label class="checkLabel">
+            <input type="checkbox" id="usuariosSoloActivos" onchange="cargarUsuarios()">
+            <span>Solo activos</span>
+        </label>
+    </div>
+    <div class="filterGroup" style="margin-left: auto;">
+        <button class="btn btnPrimary" onclick="mostrarFormularioUsuario()">
+            <i class="fas fa-plus"></i> Nuevo Usuario
+        </button>
+    </div>
+</div>
+<div class="table-responsive">
+    <table class="dataTable">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Usuario (Login)</th>
+                <th>Nivel</th>
+                <th>Técnico vinculado</th>
+                <th>Estado</th>
+                <th style="width: 100px;">Acciones</th>
+            </tr>
+        </thead>
+        <tbody id="usuariosTableBody">
+            <tr>
+                <td colspan="6" class="text-center">
+                    <div class="loadingState"><i class="fas fa-spinner fa-spin"></i> Cargando...</div>
+                </td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    let usuariosData = [];
+
+    async function cargarUsuarios() {
+        try {
+            const soloActivos = document.getElementById('usuariosSoloActivos')?.checked || false;
+            usuariosData = await apiCall(`/api/usuarios?activo=${soloActivos}`);
+            renderUsuarios();
+        } catch (error) {
+            showToast('Error al cargar usuarios: ' + error.message, 'error');
+        }
+    }
+
+    function renderUsuarios() {
+        const tbody = document.getElementById('usuariosTableBody');
+        if (!tbody) return;
+        if (!usuariosData.length) {
+            tbody.innerHTML = '<tr><td colspan="6" class="emptyState"><i class="fas fa-users"></i><p>No hay usuarios creados</p></td></tr>';
+            return;
+        }
+        const nivelLabel = { tecnico: 'Técnico', responsable: 'Responsable', admin: 'Admin' };
+        const nivelBadge = { tecnico: 'tag-info', responsable: 'tag-warning', admin: 'tag-danger' };
+        tbody.innerHTML = usuariosData.map(u => `
+            <tr>
+                <td><strong>${u.nombre} ${u.apellidos}</strong></td>
+                <td>${u.username}</td>
+                <td><span class="tag ${nivelBadge[u.nivel] || 'tag-muted'}">${nivelLabel[u.nivel] || u.nivel}</span></td>
+                <td>${u.tecnicoNombre || '<span class="text-muted">—</span>'}</td>
+                <td><span class="tag ${u.activo ? 'tag-success' : 'tag-muted'}">${u.activo ? 'Activo' : 'Inactivo'}</span></td>
+                <td class="actionsCell">
+                    <button class="btnIcon" onclick="editarUsuario(${u.id})" title="Editar"><i class="fas fa-edit"></i></button>
+                    <button class="btnIcon btnDanger" onclick="eliminarUsuario(${u.id})" title="Eliminar"><i class="fas fa-trash"></i></button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    async function mostrarFormularioUsuario(id = null) {
+        let u = {};
+        if (id) {
+            u = usuariosData.find(x => x.id === id) || {};
+        }
+        // Cargar lista de técnicos para el selector
+        let tecnicosOpts = '<option value="">— Sin vincular —</option>';
+        try {
+            const tecnicos = await apiCall('/api/tecnicos?activo=true');
+            tecnicosOpts += tecnicos.map(t =>
+                `<option value="${t.id}" ${u.tecnicoId == t.id ? 'selected' : ''}>${t.nombre} ${t.apellidos || ''}</option>`
+            ).join('');
+        } catch (e) { }
+
+        const html = `
+        <form id="formUsuario" onsubmit="event.preventDefault();">
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Nombre *</label>
+                    <input type="text" id="uNombre" class="formControl" value="${u.nombre || ''}" required>
+                </div>
+                <div class="formGroup">
+                    <label>Apellidos</label>
+                    <input type="text" id="uApellidos" class="formControl" value="${u.apellidos || ''}">
+                </div>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Usuario (Login) *</label>
+                    <input type="text" id="uUsername" class="formControl" value="${u.username || ''}" required>
+                </div>
+                <div class="formGroup">
+                    <label>Nivel *</label>
+                    <select id="uNivel" class="formControl">
+                        <option value="tecnico" ${u.nivel === 'tecnico' ? 'selected' : ''}>Técnico</option>
+                        <option value="responsable" ${u.nivel === 'responsable' ? 'selected' : ''}>Responsable</option>
+                        <option value="admin" ${u.nivel === 'admin' ? 'selected' : ''}>Admin</option>
+                    </select>
+                </div>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Técnico vinculado</label>
+                    <select id="uTecnicoId" class="formControl">${tecnicosOpts}</select>
+                </div>
+                <div class="formGroup">
+                    <label>${id ? 'Nueva contraseña (dejar vacío para no cambiar)' : 'Contraseña *'}</label>
+                    <input type="password" id="uPassword" class="formControl" ${id ? '' : 'required'}>
+                </div>
+            </div>
+            ${id ? `
+            <div class="formGroup">
+                <label>Estado</label>
+                <select id="uActivo" class="formControl">
+                    <option value="true" ${u.activo !== false ? 'selected' : ''}>Activo</option>
+                    <option value="false" ${u.activo === false ? 'selected' : ''}>Inactivo</option>
+                </select>
+            </div>` : ''}
+        </form>`;
+
+        const footer = `
+            <button class="btn btnSecondary" onclick="closeModal()">Cancelar</button>
+            <button class="btn btnPrimary" onclick="guardarUsuario(${id || 'null'})">${id ? 'Guardar' : 'Crear Usuario'}</button>
+        `;
+        openModal(id ? 'Editar Usuario' : 'Nuevo Usuario', html, footer);
+    }
+
+    async function editarUsuario(id) {
+        await mostrarFormularioUsuario(id);
+    }
+
+    async function guardarUsuario(id) {
+        const data = {
+            nombre: document.getElementById('uNombre').value,
+            apellidos: document.getElementById('uApellidos').value,
+            username: document.getElementById('uUsername').value,
+            nivel: document.getElementById('uNivel').value,
+            tecnicoId: document.getElementById('uTecnicoId').value || null,
+        };
+        const pw = document.getElementById('uPassword').value;
+        if (pw) data.password = pw;
+        if (id) {
+            data.activo = document.getElementById('uActivo').value === 'true';
+        }
+        if (!data.nombre || !data.username || !data.nivel) {
+            showToast('Completa los campos obligatorios', 'error');
+            return;
+        }
+        try {
+            if (id) {
+                await apiCall(`/api/usuario/${id}`, 'PUT', data);
+                showToast('Usuario actualizado correctamente', 'success');
+            } else {
+                await apiCall('/api/usuario', 'POST', data);
+                showToast('Usuario creado correctamente', 'success');
+            }
+            closeModal();
+            cargarUsuarios();
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    async function eliminarUsuario(id) {
+        const u = usuariosData.find(x => x.id === id);
+        if (!confirm(`¿Eliminar el usuario "${u?.nombre} ${u?.apellidos || ''}"?`)) return;
+        try {
+            await apiCall(`/api/usuario/${id}`, 'DELETE');
+            showToast('Usuario eliminado', 'success');
+            cargarUsuarios();
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        cargarUsuarios();
+    });
+</script>
+
+<style>
+    .configTabContent {
+        padding: 20px 0;
+    }
+
+    .tag-success {
+        background: #e8f5e9 !important;
+        color: #2e7d32 !important;
+    }
+
+    .tag-muted {
+        background: #f5f5f5 !important;
+        color: #999 !important;
+    }
+</style>
+{% endblock %}

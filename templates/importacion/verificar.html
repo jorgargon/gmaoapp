@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Verificar Base de Datos — GMAO{% endblock %}
+
+{% block content %}
+<div class="pageHeader">
+    <h2><i class="fas fa-database"></i> Estado de la Base de Datos</h2>
+    <div style="display:flex; gap:0.75rem;">
+        <a href="{{ url_for('importacion.index') }}" class="btn btnSecondary">
+            <i class="fas fa-arrow-left"></i> Volver a Importación
+        </a>
+    </div>
+</div>
+
+<!-- Resumen de conteos -->
+<div style="background:#fff; border:1px solid #e0e0e0; border-radius:8px; padding:1.5rem; margin-bottom:1.5rem; box-shadow:0 2px 4px rgba(0,0,0,.04);">
+    <h3 style="margin:0 0 1rem; font-size:0.95rem; color:#555; text-transform:uppercase; letter-spacing:.5px;">
+        <i class="fas fa-chart-bar"></i> Resumen General
+    </h3>
+    <div class="tableContainer" style="margin:0;">
+        <table class="dataTable small" style="width:100%;">
+            <thead>
+                <tr>
+                    <th>Entidad</th>
+                    <th style="text-align:right;">Total registros</th>
+                    <th>Notas</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><i class="fas fa-building" style="color:#1565C0; width:16px;"></i> &nbsp;Plantas</td>
+                    <td style="text-align:right; font-weight:700; color:#1565C0;">{{ summary.plantas.total }}</td>
+                    <td style="color:#888; font-size:0.85rem;">Nivel 1 de jerarquía</td>
+                </tr>
+                <tr>
+                    <td><i class="fas fa-map-marker-alt" style="color:#2E7D32; width:16px;"></i> &nbsp;Zonas</td>
+                    <td style="text-align:right; font-weight:700; color:#2E7D32;">{{ summary.zonas.total }}</td>
+                    <td style="color:#888; font-size:0.85rem;">Nivel 2</td>
+                </tr>
+                <tr>
+                    <td><i class="fas fa-grip-lines" style="color:#E65100; width:16px;"></i> &nbsp;Líneas</td>
+                    <td style="text-align:right; font-weight:700; color:#E65100;">{{ summary.lineas.total }}</td>
+                    <td style="color:#888; font-size:0.85rem;">Nivel 3</td>
+                </tr>
+                <tr>
+                    <td><i class="fas fa-cogs" style="color:#6A1B9A; width:16px;"></i> &nbsp;Máquinas</td>
+                    <td style="text-align:right; font-weight:700; color:#6A1B9A;">{{ summary.maquinas.total }}</td>
+                    <td style="color:#888; font-size:0.85rem;">Nivel 4</td>
+                </tr>
+                <tr>
+                    <td><i class="fas fa-microchip" style="color:#00695C; width:16px;"></i> &nbsp;Elementos</td>
+                    <td style="text-align:right; font-weight:700; color:#00695C;">{{ summary.elementos.total }}</td>
+                    <td style="color:#888; font-size:0.85rem;">Nivel 5 (componentes)</td>
+                </tr>
+                <tr>
+                    <td><i class="fas fa-puzzle-piece" style="color:#F57F17; width:16px;"></i> &nbsp;Recambios</td>
+                    <td style="text-align:right; font-weight:700; color:#F57F17;">{{ summary.recambios.total }}</td>
+                    <td style="color:#888; font-size:0.85rem;">Catálogo de repuestos</td>
+                </tr>
+                <tr>
+                    <td><i class="fas fa-hard-hat" style="color:#37474F; width:16px;"></i> &nbsp;Técnicos</td>
+                    <td style="text-align:right; font-weight:700; color:#37474F;">{{ summary.tecnicos.total }}</td>
+                    <td style="color:#888; font-size:0.85rem;">Personal técnico</td>
+                </tr>
+                <tr>
+                    <td><i class="fas fa-user" style="color:#880E4F; width:16px;"></i> &nbsp;Usuarios</td>
+                    <td style="text-align:right; font-weight:700; color:#880E4F;">{{ summary.usuarios.total }}</td>
+                    <td style="color:#888; font-size:0.85rem;">Accesos al sistema</td>
+                </tr>
+                <tr>
+                    <td><i class="fas fa-clipboard-list" style="color:#1565C0; width:16px;"></i> &nbsp;Gamas</td>
+                    <td style="text-align:right; font-weight:700; color:#1565C0;">{{ summary.gamas.total }}</td>
+                    <td style="color:#888; font-size:0.85rem;">
+                        {{ summary.gamas.tareas }} tareas ·
+                        {{ summary.gamas.checklist }} ítems checklist
+                    </td>
+                </tr>
+                <tr>
+                    <td><i class="fas fa-wrench" style="color:#C62828; width:16px;"></i> &nbsp;Órdenes de Trabajo</td>
+                    <td style="text-align:right; font-weight:700; color:#C62828;">{{ summary.ordenes.total }}</td>
+                    <td style="color:#888; font-size:0.85rem;">Histórico OTs</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Últimos 5 registros por entidad -->
+{% set entidades = [
+    ('plantas',   'Plantas',              'fas fa-building',        '#1565C0'),
+    ('zonas',     'Zonas',                'fas fa-map-marker-alt',  '#2E7D32'),
+    ('lineas',    'Líneas',               'fas fa-grip-lines',      '#E65100'),
+    ('maquinas',  'Máquinas',             'fas fa-cogs',            '#6A1B9A'),
+    ('elementos', 'Elementos',            'fas fa-microchip',       '#00695C'),
+    ('recambios', 'Recambios',            'fas fa-puzzle-piece',    '#F57F17'),
+    ('tecnicos',  'Técnicos',             'fas fa-hard-hat',        '#37474F'),
+    ('usuarios',  'Usuarios',             'fas fa-user',            '#880E4F'),
+    ('gamas',     'Gamas',                'fas fa-clipboard-list',  '#1565C0'),
+    ('ordenes',   'Órdenes de Trabajo',   'fas fa-wrench',          '#C62828'),
+] %}
+
+<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap:1.25rem;">
+{% for key, label, icon, color in entidades %}
+{% set ent = summary[key] %}
+<div style="background:#fff; border:1px solid #e0e0e0; border-radius:8px; overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,.04);">
+    <div style="padding:0.75rem 1rem; background:#F5F5F5; border-bottom:1px solid #e0e0e0; display:flex; align-items:center; gap:0.6rem;">
+        <i class="{{ icon }}" style="color:{{ color }};"></i>
+        <strong style="font-size:0.9rem;">{{ label }}</strong>
+        <span style="margin-left:auto; background:{{ color }}22; color:{{ color }}; padding:2px 8px; border-radius:12px; font-size:0.78rem; font-weight:700;">
+            {{ ent.total }} total
+        </span>
+    </div>
+    {% if ent.ultimos %}
+    <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
+        <thead>
+            <tr style="background:#FAFAFA;">
+                <th style="padding:6px 10px; text-align:left; color:#666; font-weight:600; border-bottom:1px solid #eee;">Código / ID</th>
+                <th style="padding:6px 10px; text-align:left; color:#666; font-weight:600; border-bottom:1px solid #eee;">Nombre</th>
+                {% if ent.ultimos[0].ts is not none %}
+                <th style="padding:6px 10px; text-align:left; color:#666; font-weight:600; border-bottom:1px solid #eee;">Fecha</th>
+                {% endif %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in ent.ultimos %}
+            <tr style="border-bottom:1px solid #f5f5f5;">
+                <td style="padding:5px 10px; color:#546E7A; font-family:monospace;">{{ item.codigo }}</td>
+                <td style="padding:5px 10px; color:#1a1a1a; max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ item.nombre }}">{{ item.nombre }}</td>
+                {% if item.ts is not none %}
+                <td style="padding:5px 10px; color:#888;">{{ item.ts }}</td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div style="padding:1rem; color:#aaa; font-size:0.85rem; text-align:center;">Sin registros</div>
+    {% endif %}
+</div>
+{% endfor %}
+</div>
+
+<div style="margin-top:1.5rem;">
+    <a href="{{ url_for('importacion.index') }}" class="btn btnSecondary">
+        <i class="fas fa-arrow-left"></i> Volver a Importación
+    </a>
+</div>
+{% endblock %}

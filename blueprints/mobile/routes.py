@@ -285,17 +285,197 @@ def nueva_ot():
 
     nombre_tecnico = _nombre_tecnico(current_user)
 
+    # Pre-fill desde QR scan (query params opcionales)
+    prefill_tipo = request.args.get('equipoTipo', '')
+    prefill_id = request.args.get('equipoId', type=int, default=0)
+
     return render_template(
         'mobile/nueva_ot.html',
         plantas=plantas,
         tecnicos=tecnicos,
         nombre_tecnico=nombre_tecnico,
+        prefill_tipo=prefill_tipo,
+        prefill_id=prefill_id,
     )
+
+
+# ---------------------------------------------------------------------------
+# QR Scanner
+# ---------------------------------------------------------------------------
+
+@bp.route('/qr-scan')
+@movil_required
+def qr_scan():
+    return render_template('mobile/qr_scan.html')
+
+
+@bp.route('/qr/<equipo_tipo>/<int:equipo_id>')
+@movil_required
+def qr_result(equipo_tipo, equipo_id):
+    """Resultado del escaneo QR: muestra OTs pendientes del activo y sus hijos."""
+    TIPOS_VALIDOS = ('planta', 'zona', 'linea', 'maquina', 'elemento')
+    if equipo_tipo not in TIPOS_VALIDOS:
+        return render_template('mobile/qr_result.html',
+                               activo_nombre='Tipo no válido', equipo_tipo=equipo_tipo,
+                               equipo_id=equipo_id, ruta=[], ots=[], error=True), 404
+
+    # Verificar que el activo existe
+    MODEL_MAP = {'planta': Planta, 'zona': Zona, 'linea': Linea,
+                 'maquina': Maquina, 'elemento': Elemento}
+    activo = MODEL_MAP[equipo_tipo].query.get(equipo_id)
+    if not activo:
+        return render_template('mobile/qr_result.html',
+                               activo_nombre='Activo no encontrado', equipo_tipo=equipo_tipo,
+                               equipo_id=equipo_id, ruta=[], ots=[], error=True), 404
+
+    ruta = _get_ruta_nombres(equipo_tipo, equipo_id)
+
+    # Recoger todos los pares (tipo, id) del activo y sus hijos
+    targets = _get_descendant_targets(equipo_tipo, equipo_id)
+
+    # Construir condiciones de filtro
+    condiciones = []
+    for t_tipo, t_id in targets:
+        condiciones.append(
+            and_(OrdenTrabajo.equipoTipo == t_tipo, OrdenTrabajo.equipoId == t_id)
+        )
+        # Campo legacy maquinaId
+        if t_tipo == 'maquina':
+            condiciones.append(OrdenTrabajo.maquinaId == t_id)
+
+    ots = []
+    if condiciones:
+        ots = OrdenTrabajo.query.filter(
+            OrdenTrabajo.estado.in_(['pendiente', 'asignada', 'en_curso']),
+            or_(*condiciones),
+        ).order_by(OrdenTrabajo.fechaCreacion.desc()).all()
+        for ot in ots:
+            _enrich_ot(ot)
+
+    return render_template('mobile/qr_result.html',
+                           activo_nombre=activo.nombre, equipo_tipo=equipo_tipo,
+                           equipo_id=equipo_id, ruta=ruta, ots=ots)
+
+
+def _get_descendant_targets(equipo_tipo, equipo_id):
+    """Retorna lista de tuplas (tipo, id) del activo y todos sus descendientes."""
+    targets = [(equipo_tipo, equipo_id)]
+
+    if equipo_tipo == 'elemento':
+        return targets
+
+    if equipo_tipo == 'maquina':
+        for e in Elemento.query.filter_by(maquinaId=equipo_id):
+            targets.append(('elemento', e.id))
+        return targets
+
+    if equipo_tipo == 'linea':
+        for m in Maquina.query.filter_by(lineaId=equipo_id):
+            targets.append(('maquina', m.id))
+            for e in Elemento.query.filter_by(maquinaId=m.id):
+                targets.append(('elemento', e.id))
+        return targets
+
+    if equipo_tipo == 'zona':
+        for l in Linea.query.filter_by(zonaId=equipo_id):
+            targets.append(('linea', l.id))
+            for m in Maquina.query.filter_by(lineaId=l.id):
+                targets.append(('maquina', m.id))
+                for e in Elemento.query.filter_by(maquinaId=m.id):
+                    targets.append(('elemento', e.id))
+        return targets
+
+    if equipo_tipo == 'planta':
+        for z in Zona.query.filter_by(plantaId=equipo_id):
+            targets.append(('zona', z.id))
+            for l in Linea.query.filter_by(zonaId=z.id):
+                targets.append(('linea', l.id))
+                for m in Maquina.query.filter_by(lineaId=l.id):
+                    targets.append(('maquina', m.id))
+                    for e in Elemento.query.filter_by(maquinaId=m.id):
+                        targets.append(('elemento', e.id))
+        return targets
+
+    return targets
 
 
 # ---------------------------------------------------------------------------
 # Mini API para la vista móvil
 # ---------------------------------------------------------------------------
+
+@bp.route('/api/qr-jerarquia')
+@movil_required
+def api_qr_jerarquia():
+    """Devuelve la jerarquía completa de un equipo para pre-fill del formulario."""
+    tipo = request.args.get('tipo', '')
+    eid = request.args.get('id', type=int)
+    if not tipo or not eid:
+        return jsonify({'error': 'Parámetros requeridos'}), 400
+
+    result = {'planta': None, 'zona': None, 'linea': None, 'maquina': None, 'elemento': None}
+
+    if tipo == 'elemento':
+        elem = Elemento.query.get(eid)
+        if not elem:
+            return jsonify({'error': 'No encontrado'}), 404
+        result['elemento'] = {'id': elem.id, 'nombre': elem.nombre}
+        maq = Maquina.query.get(elem.maquinaId)
+        if maq:
+            result['maquina'] = {'id': maq.id, 'nombre': maq.nombre}
+            _fill_jerarquia_up(maq, result)
+
+    elif tipo == 'maquina':
+        maq = Maquina.query.get(eid)
+        if not maq:
+            return jsonify({'error': 'No encontrado'}), 404
+        result['maquina'] = {'id': maq.id, 'nombre': maq.nombre}
+        _fill_jerarquia_up(maq, result)
+
+    elif tipo == 'linea':
+        lin = Linea.query.get(eid)
+        if not lin:
+            return jsonify({'error': 'No encontrado'}), 404
+        result['linea'] = {'id': lin.id, 'nombre': lin.nombre}
+        zona = Zona.query.get(lin.zonaId)
+        if zona:
+            result['zona'] = {'id': zona.id, 'nombre': zona.nombre}
+            planta = Planta.query.get(zona.plantaId)
+            if planta:
+                result['planta'] = {'id': planta.id, 'nombre': planta.nombre}
+
+    elif tipo == 'zona':
+        z = Zona.query.get(eid)
+        if not z:
+            return jsonify({'error': 'No encontrado'}), 404
+        result['zona'] = {'id': z.id, 'nombre': z.nombre}
+        planta = Planta.query.get(z.plantaId)
+        if planta:
+            result['planta'] = {'id': planta.id, 'nombre': planta.nombre}
+
+    elif tipo == 'planta':
+        p = Planta.query.get(eid)
+        if not p:
+            return jsonify({'error': 'No encontrado'}), 404
+        result['planta'] = {'id': p.id, 'nombre': p.nombre}
+
+    else:
+        return jsonify({'error': 'Tipo no válido'}), 400
+
+    return jsonify(result)
+
+
+def _fill_jerarquia_up(maq, result):
+    """Rellena la jerarquía hacia arriba desde una máquina."""
+    lin = Linea.query.get(maq.lineaId)
+    if lin:
+        result['linea'] = {'id': lin.id, 'nombre': lin.nombre}
+        zona = Zona.query.get(lin.zonaId)
+        if zona:
+            result['zona'] = {'id': zona.id, 'nombre': zona.nombre}
+            planta = Planta.query.get(zona.plantaId)
+            if planta:
+                result['planta'] = {'id': planta.id, 'nombre': planta.nombre}
+
 
 @bp.route('/api/recambios')
 @movil_required

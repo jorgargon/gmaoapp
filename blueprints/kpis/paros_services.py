@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 
 from sqlalchemy import and_, or_
 
-from models import db, OrdenTrabajo, Maquina, Elemento, Linea, Zona, ConfiguracionGeneral
+from models import db, OrdenTrabajo, Maquina, Elemento, Linea, Zona, Planta, ConfiguracionGeneral
 
 log = logging.getLogger(__name__)
 
@@ -386,6 +386,8 @@ def calcular_paros(
     agrupacion: str = 'mensual',
     lineas_ids: list = None,
     maquinas_ids: list = None,
+    plantas_ids: list = None,
+    zonas_ids: list = None,
 ) -> dict:
     """
     Calcula todos los KPIs de paros de producción.
@@ -397,6 +399,8 @@ def calcular_paros(
     ----------
     fecha_ini, fecha_fin : rango de fechas
     agrupacion           : 'mensual' | 'anual'
+    plantas_ids          : lista de int — filtro por planta (opcional)
+    zonas_ids            : lista de int — filtro por zona (opcional)
     lineas_ids           : lista de int — filtro por línea (opcional)
     maquinas_ids         : lista de int — filtro por máquina (opcional)
 
@@ -410,10 +414,30 @@ def calcular_paros(
 
     # 2. Cargar jerarquía una vez
     maquinas, elementos, lineas_dict = _precargar_jerarquia()
+    zonas_dict  = {z.id: z for z in Zona.query.all()}
+    plantas_dict = {p.id: p for p in Planta.query.all()}
 
-    # 3. Aplicar filtros de línea/máquina en Python (equipoTipo es polimórfico)
+    # 3. Construir sets de filtro — resolver cadena Planta→Zona→Línea
+    # Si se filtra por planta/zona, expandimos a lineas_ids automáticamente
     lineas_set   = set(lineas_ids)   if lineas_ids   else None
     maquinas_set = set(maquinas_ids) if maquinas_ids else None
+    plantas_set  = set(plantas_ids)  if plantas_ids  else None
+    zonas_set    = set(zonas_ids)    if zonas_ids    else None
+
+    # Si hay filtro de Planta o Zona, calculamos el conjunto de lineas válidas
+    if plantas_set or zonas_set:
+        lineas_validas = set()
+        for lid, linea in lineas_dict.items():
+            zona = zonas_dict.get(linea.zonaId)
+            if zona is None:
+                continue
+            if zonas_set and zona.id not in zonas_set:
+                continue
+            if plantas_set and zona.plantaId not in plantas_set:
+                continue
+            lineas_validas.add(lid)
+        # Intersectar con filtro de linea explícito si existe
+        lineas_set = (lineas_set & lineas_validas) if lineas_set else lineas_validas
 
     ots = []
     for ot in ots_all:
@@ -582,6 +606,8 @@ def calcular_paros(
             'fecha_fin':    fecha_fin.isoformat(),
             'agrupacion':   agrupacion,
             'turno_planta': turno_key,
+            'plantas_ids':  list(plantas_set)   if plantas_set  else [],
+            'zonas_ids':    list(zonas_set)     if zonas_set    else [],
             'lineas_ids':   list(lineas_set)    if lineas_set   else [],
             'maquinas_ids': list(maquinas_set)  if maquinas_set else [],
         },
@@ -592,12 +618,28 @@ def calcular_paros(
 # LISTAS PARA LOS FILTROS
 # =============================================================================
 
-def get_lineas():
-    """Lista {id, nombre} de todas las líneas para el selector."""
+def get_plantas():
+    """Lista {id, nombre} de todas las plantas."""
     return [
-        {'id': l.id, 'nombre': l.nombre}
-        for l in Linea.query.order_by(Linea.nombre).all()
+        {'id': p.id, 'nombre': p.nombre}
+        for p in Planta.query.order_by(Planta.nombre).all()
     ]
+
+
+def get_zonas(plantas_ids: list = None):
+    """Lista {id, nombre, planta_id} de zonas, filtradas por planta si se indica."""
+    q = Zona.query.order_by(Zona.nombre)
+    if plantas_ids:
+        q = q.filter(Zona.plantaId.in_(plantas_ids))
+    return [{'id': z.id, 'nombre': z.nombre, 'planta_id': z.plantaId} for z in q.all()]
+
+
+def get_lineas(zonas_ids: list = None):
+    """Lista {id, nombre, zona_id} de todas las líneas, filtradas por zona si se indica."""
+    q = Linea.query.order_by(Linea.nombre)
+    if zonas_ids:
+        q = q.filter(Linea.zonaId.in_(zonas_ids))
+    return [{'id': l.id, 'nombre': l.nombre, 'zona_id': l.zonaId} for l in q.all()]
 
 
 def get_maquinas(lineas_ids: list = None):
@@ -750,3 +792,365 @@ def exportar_paros_excel(datos: dict) -> 'io.BytesIO':
     wb.save(buf)
     buf.seek(0)
     return buf
+
+
+# =============================================================================
+# EXPORTACIÓN PDF
+# =============================================================================
+
+def _png_size(data: bytes):
+    """Devuelve (ancho, alto) en píxeles leyendo la cabecera PNG.
+    Estructura: [0-7 firma] [8-11 lon] [12-15 'IHDR'] [16-19 width] [20-23 height]
+    """
+    import struct
+    if len(data) >= 24 and data[:8] == b'\x89PNG\r\n\x1a\n':
+        return struct.unpack('>II', data[16:24])   # width @ 16, height @ 20
+    return (800, 400)
+
+
+def exportar_paros_pdf(datos: dict, chart_images: dict = None) -> 'io.BytesIO':
+    """
+    Genera un PDF con las tablas de indicadores de paros.
+    Cabecera con logo GMAO JGG en cada página.
+    Incluye: Indicadores Globales, Por Línea/Máquina, Top 10 y Benchmarking.
+    """
+    import io
+    import os
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.lib.units import cm
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import (
+        SimpleDocTemplate, Table, TableStyle, Paragraph,
+        Spacer, KeepTogether, PageBreak, Image as RLImage
+    )
+
+    # ── Constantes de color ───────────────────────────────────────────────────
+    AZUL_HDR   = colors.HexColor('#00335F')   # color del logo (cabecera canvas)
+    AZUL       = colors.HexColor('#1565C0')   # cabeceras de tabla
+    AZUL_CLARO = colors.HexColor('#E3F2FD')
+    GRIS_TXT   = colors.HexColor('#555555')
+    BLANCO     = colors.white
+    VERDE      = colors.HexColor('#2E7D32')
+    NARANJA    = colors.HexColor('#E65100')
+    ROJO       = colors.HexColor('#C62828')
+
+    PAGE_W, PAGE_H = landscape(A4)
+    HDR_H   = 1.6 * cm   # alto de la cabecera dibujada en canvas
+    HDR_TOP = 0.35 * cm  # margen superior hasta la cabecera
+
+    logo_path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+        'static', 'images', 'logoWhite.png'
+    )
+
+    filtros_ap = datos.get('filtros_aplicados', {})
+    fi  = filtros_ap.get('fecha_ini', '—')
+    ff  = filtros_ap.get('fecha_fin', '—')
+    agr = filtros_ap.get('agrupacion', '—')
+    tur = filtros_ap.get('turno_planta', '—')
+
+    # ── Cabecera + pie dibujados en canvas (se repiten en cada página) ────────
+    def _page_deco(canvas, doc):
+        canvas.saveState()
+
+        # Fondo de la cabecera con el color del logo
+        hdr_y = PAGE_H - HDR_TOP - HDR_H
+        canvas.setFillColor(AZUL_HDR)
+        canvas.rect(1.2 * cm, hdr_y, PAGE_W - 2.4 * cm, HDR_H, fill=1, stroke=0)
+
+        # Logo
+        logo_drawn = False
+        if os.path.exists(logo_path):
+            try:
+                canvas.drawImage(
+                    logo_path,
+                    1.6 * cm, hdr_y + 0.15 * cm,
+                    width=2.8 * cm, height=HDR_H - 0.3 * cm,
+                    preserveAspectRatio=True, mask='auto',
+                )
+                logo_drawn = True
+            except Exception:
+                pass
+
+        # Texto "GMAO JGG"
+        txt_x = (1.6 + 3.2) * cm if logo_drawn else 1.8 * cm
+        canvas.setFillColor(BLANCO)
+        canvas.setFont('Helvetica-Bold', 12)
+        canvas.drawString(txt_x, hdr_y + HDR_H * 0.52, 'GMAO JGG')
+
+        # Subtítulo
+        canvas.setFont('Helvetica', 7.5)
+        canvas.setFillColor(colors.HexColor('#8BB8D4'))
+        canvas.drawString(txt_x, hdr_y + HDR_H * 0.16,
+                          f'KPIs Paros de Producción  ·  {fi} → {ff}  ·  {agr}  ·  Turno: {tur}')
+
+        # Pie de página
+        canvas.setFont('Helvetica', 7)
+        canvas.setFillColor(GRIS_TXT)
+        canvas.drawString(1.5 * cm, 0.65 * cm,
+                          f'GMAO JGG  ·  KPIs Paros de Producción  ·  {fi} → {ff}')
+        canvas.drawRightString(PAGE_W - 1.5 * cm, 0.65 * cm, f'Pág. {doc.page}')
+
+        canvas.restoreState()
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=landscape(A4),
+        leftMargin=1.5 * cm, rightMargin=1.5 * cm,
+        topMargin=HDR_TOP + HDR_H + 0.6 * cm,
+        bottomMargin=1.5 * cm,
+        title='KPIs Paros de Producción',
+        author='GMAO JGG',
+    )
+
+    styles = getSampleStyleSheet()
+    st_sec  = ParagraphStyle('sec', parent=styles['Heading2'],
+                             fontSize=10, textColor=AZUL,
+                             spaceBefore=8, spaceAfter=4)
+    st_sub  = ParagraphStyle('sub', parent=styles['Normal'],
+                             fontSize=8, textColor=GRIS_TXT,
+                             spaceBefore=8, spaceAfter=3)
+
+    periodos    = datos.get('periodos_labels', [])
+    global_data = datos.get('global', [])
+
+    import base64 as _b64
+
+    chart_images = chart_images or {}
+    log.info("PDF: %d gráficas recibidas: %s", len(chart_images), list(chart_images.keys()))
+
+    # ── Helper: convierte base64 PNG → Image flowable con ancho fijo ──────────
+    def _chart_img(key: str, target_w: float):
+        b64 = chart_images.get(key, '')
+        if not b64:
+            return None
+        try:
+            raw = _b64.b64decode(b64.split(',', 1)[-1])
+            pw, ph = _png_size(raw)
+            target_h = target_w * ph / pw if pw else target_w * 0.5
+            img = RLImage(io.BytesIO(raw), width=target_w, height=target_h)
+            log.info("  gráfica '%s': %dx%d px → %.1fpt × %.1fpt", key, pw, ph, target_w, target_h)
+            return img
+        except Exception as e:
+            log.warning("  ERROR gráfica '%s': %s", key, e)
+            return None
+
+    def _charts_row(keys: list, page_width: float):
+        """Tabla de 1 fila con las gráficas indicadas en columnas iguales."""
+        n = len(keys)
+        gap = 0.3 * cm
+        cell_w = (page_width - gap * (n - 1)) / n
+        imgs = [_chart_img(k, cell_w) for k in keys]
+        if not any(imgs):
+            return None
+        cells  = [img if img else '' for img in imgs]
+        col_ws = [cell_w] * (n - 1) + [cell_w + gap * (n - 1)]
+        tbl = Table([cells], colWidths=col_ws)
+        tbl.setStyle(TableStyle([
+            ('ALIGN',         (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN',        (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING',    (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LEFTPADDING',   (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING',  (0, 0), (-1, -1), 0),
+        ]))
+        return tbl
+
+    # Estilo base para todas las tablas
+    def _make_th_style():
+        return [
+            ('BACKGROUND',    (0, 0), (-1, 0), AZUL),
+            ('TEXTCOLOR',     (0, 0), (-1, 0), BLANCO),
+            ('FONTNAME',      (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE',      (0, 0), (-1, -1), 7.5),
+            ('ALIGN',         (0, 0), (-1, -1), 'CENTER'),
+            ('ALIGN',         (0, 1), (0, -1), 'LEFT'),
+            ('GRID',          (0, 0), (-1, -1), 0.3, colors.HexColor('#DDDDDD')),
+            ('ROWBACKGROUNDS',(0, 1), (-1, -1), [BLANCO, AZUL_CLARO]),
+            ('LEFTPADDING',   (0, 0), (-1, -1), 4),
+            ('RIGHTPADDING',  (0, 0), (-1, -1), 4),
+            ('TOPPADDING',    (0, 0), (-1, -1), 3),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+        ]
+
+    story = []
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # SECCIÓN 1 — Indicadores Globales
+    # Tabla con repetición de cabecera en cada página (splitByRow por defecto=1)
+    # ─────────────────────────────────────────────────────────────────────────
+    FILAS_GLOBAL_PDF = [
+        ('Nº Paros',            'n_paros',    '{:.0f}'),
+        ('Horas Paro',          'h_paros',    '{:.2f} h'),
+        ('Paros / día',         'paros_dia',  '{:.3f}'),
+        ('Horas paro / día',    'hparos_dia', '{:.3f} h/día'),
+        ('MTBF (h)',            'mtbf_h',     '{:.2f} h'),
+        ('MTBF (días)',         'mtbf_dias',  '{:.2f} días'),
+        ('MTTR (h)',            'mttr_h',     '{:.2f} h'),
+        ('Disponibilidad (%)',  'disp_pct',   '{:.2f} %'),
+        ('Tasa fallos λ (f/h)', 'lambda',     '{:.5f}'),
+        ('Fiabilidad 24 h (%)', 'r_24h',      '{:.2f} %'),
+        ('Fiabilidad 168h (%)', 'r_168h',     '{:.2f} %'),
+    ]
+
+    col_ancho = (doc.width - 4.5 * cm) / max(len(periodos), 1)
+    g1_rows = [['Indicador'] + periodos]
+    for label, campo, fmt in FILAS_GLOBAL_PDF:
+        fila = [label]
+        for p in global_data:
+            v = p.get(campo)
+            fila.append(fmt.format(v) if v is not None else '—')
+        g1_rows.append(fila)
+
+    col_widths_g1 = [4.5 * cm] + [col_ancho] * len(periodos)
+    g1_table = Table(g1_rows, colWidths=col_widths_g1, repeatRows=1)
+    g1_table.setStyle(TableStyle(_make_th_style()))
+
+    story.append(Paragraph('Sección 1 — Indicadores Globales de Planta', st_sec))
+    story.append(g1_table)
+    story.append(Spacer(1, 0.3 * cm))
+
+    # Gráficas de la sección 1: G1+G1b en una fila, G2+G3 en otra
+    _cr1 = _charts_row(['g1', 'g1b'], doc.width)
+    if _cr1:
+        story.append(_cr1)
+        story.append(Spacer(1, 0.2 * cm))
+    _cr2 = _charts_row(['g2', 'g3'], doc.width)
+    if _cr2:
+        story.append(_cr2)
+        story.append(Spacer(1, 0.2 * cm))
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # SECCIÓN 2 — Por Línea / Máquina
+    # Una sub-tabla por cada KPI; página nueva al inicio
+    # ─────────────────────────────────────────────────────────────────────────
+    por_grupo = datos.get('por_grupo', {})
+    grupos    = por_grupo.get('grupos', [])
+    agrup     = por_grupo.get('agrupado_por', 'linea')
+    titulo_col = 'Línea' if agrup == 'linea' else 'Máquina'
+
+    if grupos:
+        story.append(PageBreak())
+        story.append(Paragraph(f'Sección 2 — Indicadores por {titulo_col}', st_sec))
+
+        TEND_MAP = {'mejora': '↑ Mejora', 'estable': '→ Estable', 'deterioro': '↓ Deterioro'}
+        GRUPO_KPIS_PDF = [
+            ('MTBF (h)',           'mtbf_h',   'tendencia_mtbf',   '{:.2f}'),
+            ('MTTR (h)',           'mttr_h',   'tendencia_mttr',   '{:.2f}'),
+            ('Disponibilidad (%)', 'disp_pct', 'tendencia_disp',   '{:.2f}'),
+            ('Nº Paros',           'n_paros',  None,               '{:.0f}'),
+            ('Horas de Paro',      'h_paros',  None,               '{:.2f}'),
+            ('Tasa Fallos λ (f/h)','lambda',   'tendencia_lambda', '{:.5f}'),
+        ]
+
+        # Ancho columnas: grupo | periodos… | tendencia (opcional)
+        c_grupo = 4.0 * cm
+        c_tend  = 2.2 * cm
+        n_p = max(len(periodos), 1)
+
+        for kpi_label, kpi_campo, tend_key, fmt in GRUPO_KPIS_PDF:
+            has_tend = tend_key is not None
+            c_p = (doc.width - c_grupo - (c_tend if has_tend else 0)) / n_p
+            header = [titulo_col] + periodos + (['Tendencia'] if has_tend else [])
+            rows = [header]
+            for g in grupos:
+                fila = [g['nombre']]
+                for p in g['periodos']:
+                    v = p.get(kpi_campo)
+                    fila.append(fmt.format(v) if v is not None else '—')
+                if has_tend:
+                    fila.append(TEND_MAP.get(g.get(tend_key, ''), '—'))
+                rows.append(fila)
+
+            cw = [c_grupo] + [c_p] * len(periodos) + ([c_tend] if has_tend else [])
+            tbl = Table(rows, colWidths=cw, repeatRows=1)
+            tbl.setStyle(TableStyle(_make_th_style()))
+
+            story.append(KeepTogether([
+                Paragraph(kpi_label, st_sub),
+                tbl,
+            ]))
+            story.append(Spacer(1, 0.25 * cm))
+
+        # Gráficas de la sección 2: G4 (disponibilidad) + G5 (nº paros)
+        _cr_g45 = _charts_row(['g4', 'g5'], doc.width)
+        if _cr_g45:
+            story.append(Spacer(1, 0.1 * cm))
+            story.append(_cr_g45)
+            story.append(Spacer(1, 0.2 * cm))
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # SECCIÓN 3 — Top 10 Equipos
+    # ─────────────────────────────────────────────────────────────────────────
+    top10 = datos.get('top10', [])
+    if top10:
+        story.append(PageBreak())
+        t10_rows = [['Equipo (Línea — Máquina)', 'Nº Paros', '% del Total', '% Acum.', 'Horas Paro']]
+        for t in top10:
+            equipo = (f"{t.get('linea','—')} — {t.get('maquina','')}"
+                      if t.get('maquina') else t.get('linea', '—'))
+            t10_rows.append([
+                equipo,
+                f"{t.get('n_paros', 0):.0f}",
+                f"{t.get('pct_total', 0):.1f} %",
+                f"{t.get('pct_acumulado', 0):.1f} %",
+                f"{t.get('h_paros', 0):.2f} h",
+            ])
+        t10_table = Table(t10_rows,
+                          colWidths=[8 * cm, 2.5 * cm, 2.5 * cm, 2.5 * cm, 2.5 * cm],
+                          repeatRows=1)
+        t10_table.setStyle(TableStyle(_make_th_style()))
+
+        story.append(KeepTogether([
+            Paragraph('Sección 3 — Top 10 Equipos con más Paros', st_sec),
+            t10_table,
+        ]))
+        story.append(Spacer(1, 0.3 * cm))
+
+        # Gráfica G6 — Pareto de paros (ancho completo)
+        _cr_g6 = _charts_row(['g6'], doc.width)
+        if _cr_g6:
+            story.append(_cr_g6)
+            story.append(Spacer(1, 0.2 * cm))
+
+    # ─────────────────────────────────────────────────────────────────────────
+    # SECCIÓN 4 — Benchmarking Clase Mundial
+    # ─────────────────────────────────────────────────────────────────────────
+    bench_rows = datos.get('benchmarking', {}).get('rows', [])
+    if bench_rows:
+        bh = ['Indicador', 'Valor Actual', 'Referencia Clase Mundial', 'Gap', 'Estado']
+        b_rows = [bh]
+        ESTADO_MAP = {'ok': 'OK', 'mejorable': 'Mejorable', 'critico': 'Critico', 'nd': 'N/D'}
+        for r in bench_rows:
+            v = r.get('valor')
+            b_rows.append([
+                r.get('indicador', ''),
+                f"{v:.3f} {r.get('unidad','')}" if v is not None else '—',
+                r.get('referencia', ''),
+                r.get('gap', ''),
+                ESTADO_MAP.get(r.get('estado', ''), '—'),
+            ])
+        b_style = _make_th_style()
+        for i, r in enumerate(bench_rows, start=1):
+            est = r.get('estado')
+            col = VERDE if est == 'ok' else NARANJA if est == 'mejorable' else ROJO if est == 'critico' else GRIS_TXT
+            b_style += [
+                ('TEXTCOLOR', (4, i), (4, i), col),
+                ('FONTNAME',  (4, i), (4, i), 'Helvetica-Bold'),
+            ]
+        b_table = Table(b_rows,
+                        colWidths=[5 * cm, 3.5 * cm, 4.5 * cm, 3 * cm, 3 * cm],
+                        repeatRows=1)
+        b_table.setStyle(TableStyle(b_style))
+
+        story.append(KeepTogether([
+            Paragraph('Sección 4 — Benchmarking Clase Mundial', st_sec),
+            b_table,
+        ]))
+
+    doc.build(story, onFirstPage=_page_deco, onLaterPages=_page_deco)
+    buf.seek(0)
+    return buf
+

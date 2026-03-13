@@ -1,0 +1,195 @@
+{% extends "base.html" %}
+
+{% block title %}Importación Masiva — GMAO{% endblock %}
+
+{% block content %}
+<div class="pageHeader">
+    <h2><i class="fas fa-file-import"></i> Importación Masiva de Datos</h2>
+    <div style="display:flex; gap:0.75rem; align-items:center;">
+        <a href="{{ url_for('importacion.verificar') }}" class="btn btnSecondary">
+            <i class="fas fa-database"></i> Verificar BD
+        </a>
+    </div>
+</div>
+
+<!-- Orden de importación recomendado -->
+<div style="background:#E3F2FD; border:1px solid #90CAF9; border-radius:8px; padding:1rem 1.25rem; margin-bottom:1.5rem; display:flex; align-items:flex-start; gap:0.75rem;">
+    <i class="fas fa-info-circle" style="color:#1565C0; margin-top:2px; flex-shrink:0;"></i>
+    <div>
+        <strong style="color:#1565C0;">Orden de importación recomendado:</strong>
+        <span style="color:#1a1a1a; margin-left:0.5rem;">
+            <strong>1.</strong> Recambios &nbsp;→&nbsp;
+            <strong>2.</strong> Técnicos &nbsp;→&nbsp;
+            <strong>3.</strong> Usuarios &nbsp;→&nbsp;
+            <strong>4.</strong> Activos &nbsp;→&nbsp;
+            <strong>5.</strong> Gamas &nbsp;→&nbsp;
+            <strong>6.</strong> Histórico OT
+        </span>
+        <div style="font-size:0.82rem; color:#555; margin-top:4px;">
+            Siga este orden para evitar errores de referencias entre entidades. El fichero debe tener formato .xlsx.
+            Tamaño máximo: <strong>10 MB</strong>.
+        </div>
+    </div>
+</div>
+
+<!-- Grid de tarjetas de importación -->
+<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap:1.25rem;">
+
+    <!-- 1. Recambios -->
+    <div style="background:#fff; border:1px solid #e0e0e0; border-radius:8px; padding:1.5rem; box-shadow:0 2px 4px rgba(0,0,0,.06);">
+        <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem;">
+            <span style="width:48px; height:48px; border-radius:50%; background:#FFF3E0; display:flex; align-items:center; justify-content:center; font-size:1.4rem; color:#E65100; flex-shrink:0;">
+                <i class="fas fa-puzzle-piece"></i>
+            </span>
+            <div>
+                <div style="font-weight:700; font-size:1rem; color:#1a1a1a;">Recambios y Stock</div>
+                <div style="font-size:0.82rem; color:#666; margin-top:2px;">1 hoja: RECAMBIOS</div>
+            </div>
+        </div>
+        <div style="font-size:0.82rem; color:#555; margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid #f0f0f0;">
+            Importa el catálogo de recambios con niveles de stock, precios y proveedores.
+        </div>
+        <form method="POST" action="{{ url_for('importacion.upload', tipo='recambios') }}" enctype="multipart/form-data">
+            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                <input type="file" name="fichero" accept=".xlsx" required
+                    style="flex:1; min-width:0; font-size:0.82rem; border:1px solid #ddd; border-radius:4px; padding:6px 8px; background:#fafafa;">
+                <button type="submit" class="btn btnPrimary btnSm">
+                    <i class="fas fa-upload"></i> Cargar
+                </button>
+            </div>
+            <div style="font-size:0.75rem; color:#999; margin-top:6px;">Máx. 10 MB · solo .xlsx</div>
+        </form>
+    </div>
+
+    <!-- 2. Técnicos -->
+    <div style="background:#fff; border:1px solid #e0e0e0; border-radius:8px; padding:1.5rem; box-shadow:0 2px 4px rgba(0,0,0,.06);">
+        <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem;">
+            <span style="width:48px; height:48px; border-radius:50%; background:#E8F5E9; display:flex; align-items:center; justify-content:center; font-size:1.4rem; color:#2E7D32; flex-shrink:0;">
+                <i class="fas fa-hard-hat"></i>
+            </span>
+            <div>
+                <div style="font-weight:700; font-size:1rem; color:#1a1a1a;">Técnicos</div>
+                <div style="font-size:0.82rem; color:#666; margin-top:2px;">1 hoja: TECNICOS</div>
+            </div>
+        </div>
+        <div style="font-size:0.82rem; color:#555; margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid #f0f0f0;">
+            Importa el personal técnico con su especialidad, tipo (interno/externo) y coste/hora.
+        </div>
+        <form method="POST" action="{{ url_for('importacion.upload', tipo='tecnicos') }}" enctype="multipart/form-data">
+            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                <input type="file" name="fichero" accept=".xlsx" required
+                    style="flex:1; min-width:0; font-size:0.82rem; border:1px solid #ddd; border-radius:4px; padding:6px 8px; background:#fafafa;">
+                <button type="submit" class="btn btnPrimary btnSm">
+                    <i class="fas fa-upload"></i> Cargar
+                </button>
+            </div>
+            <div style="font-size:0.75rem; color:#999; margin-top:6px;">Máx. 10 MB · solo .xlsx</div>
+        </form>
+    </div>
+
+    <!-- 3. Usuarios -->
+    <div style="background:#fff; border:1px solid #e0e0e0; border-radius:8px; padding:1.5rem; box-shadow:0 2px 4px rgba(0,0,0,.06);">
+        <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem;">
+            <span style="width:48px; height:48px; border-radius:50%; background:#F3E5F5; display:flex; align-items:center; justify-content:center; font-size:1.4rem; color:#6A1B9A; flex-shrink:0;">
+                <i class="fas fa-users"></i>
+            </span>
+            <div>
+                <div style="font-weight:700; font-size:1rem; color:#1a1a1a;">Usuarios</div>
+                <div style="font-size:0.82rem; color:#666; margin-top:2px;">1 hoja: USUARIOS</div>
+            </div>
+        </div>
+        <div style="font-size:0.82rem; color:#555; margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid #f0f0f0;">
+            Importa usuarios de la aplicación con su nivel de acceso (tecnico / responsable / admin).
+        </div>
+        <form method="POST" action="{{ url_for('importacion.upload', tipo='usuarios') }}" enctype="multipart/form-data">
+            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                <input type="file" name="fichero" accept=".xlsx" required
+                    style="flex:1; min-width:0; font-size:0.82rem; border:1px solid #ddd; border-radius:4px; padding:6px 8px; background:#fafafa;">
+                <button type="submit" class="btn btnPrimary btnSm">
+                    <i class="fas fa-upload"></i> Cargar
+                </button>
+            </div>
+            <div style="font-size:0.75rem; color:#999; margin-top:6px;">Máx. 10 MB · solo .xlsx</div>
+        </form>
+    </div>
+
+    <!-- 4. Activos -->
+    <div style="background:#fff; border:1px solid #e0e0e0; border-radius:8px; padding:1.5rem; box-shadow:0 2px 4px rgba(0,0,0,.06);">
+        <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem;">
+            <span style="width:48px; height:48px; border-radius:50%; background:#E3F2FD; display:flex; align-items:center; justify-content:center; font-size:1.4rem; color:#1565C0; flex-shrink:0;">
+                <i class="fas fa-sitemap"></i>
+            </span>
+            <div>
+                <div style="font-weight:700; font-size:1rem; color:#1a1a1a;">Jerarquía de Activos</div>
+                <div style="font-size:0.82rem; color:#666; margin-top:2px;">5 hojas: Plantas · Zonas · Líneas · Máquinas · Elementos</div>
+            </div>
+        </div>
+        <div style="font-size:0.82rem; color:#555; margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid #f0f0f0;">
+            Importa la jerarquía completa de activos. Las empresas deben existir previamente en la BD.
+        </div>
+        <form method="POST" action="{{ url_for('importacion.upload', tipo='activos') }}" enctype="multipart/form-data">
+            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                <input type="file" name="fichero" accept=".xlsx" required
+                    style="flex:1; min-width:0; font-size:0.82rem; border:1px solid #ddd; border-radius:4px; padding:6px 8px; background:#fafafa;">
+                <button type="submit" class="btn btnPrimary btnSm">
+                    <i class="fas fa-upload"></i> Cargar
+                </button>
+            </div>
+            <div style="font-size:0.75rem; color:#999; margin-top:6px;">Máx. 10 MB · solo .xlsx</div>
+        </form>
+    </div>
+
+    <!-- 5. Gamas -->
+    <div style="background:#fff; border:1px solid #e0e0e0; border-radius:8px; padding:1.5rem; box-shadow:0 2px 4px rgba(0,0,0,.06);">
+        <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem;">
+            <span style="width:48px; height:48px; border-radius:50%; background:#E0F2F1; display:flex; align-items:center; justify-content:center; font-size:1.4rem; color:#00695C; flex-shrink:0;">
+                <i class="fas fa-clipboard-list"></i>
+            </span>
+            <div>
+                <div style="font-weight:700; font-size:1rem; color:#1a1a1a;">Gamas de Mantenimiento</div>
+                <div style="font-size:0.82rem; color:#666; margin-top:2px;">4 hojas: Gamas · Tareas · Checklist · Recambios</div>
+            </div>
+        </div>
+        <div style="font-size:0.82rem; color:#555; margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid #f0f0f0;">
+            Importa las gamas de mantenimiento con sus tareas, checklist y recambios asociados.
+        </div>
+        <form method="POST" action="{{ url_for('importacion.upload', tipo='gamas') }}" enctype="multipart/form-data">
+            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                <input type="file" name="fichero" accept=".xlsx" required
+                    style="flex:1; min-width:0; font-size:0.82rem; border:1px solid #ddd; border-radius:4px; padding:6px 8px; background:#fafafa;">
+                <button type="submit" class="btn btnPrimary btnSm">
+                    <i class="fas fa-upload"></i> Cargar
+                </button>
+            </div>
+            <div style="font-size:0.75rem; color:#999; margin-top:6px;">Máx. 10 MB · solo .xlsx</div>
+        </form>
+    </div>
+
+    <!-- 6. Histórico OT -->
+    <div style="background:#fff; border:1px solid #e0e0e0; border-radius:8px; padding:1.5rem; box-shadow:0 2px 4px rgba(0,0,0,.06);">
+        <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem;">
+            <span style="width:48px; height:48px; border-radius:50%; background:#FCE4EC; display:flex; align-items:center; justify-content:center; font-size:1.4rem; color:#880E4F; flex-shrink:0;">
+                <i class="fas fa-history"></i>
+            </span>
+            <div>
+                <div style="font-weight:700; font-size:1rem; color:#1a1a1a;">Histórico de OTs</div>
+                <div style="font-size:0.82rem; color:#666; margin-top:2px;">1 hoja: ORDENES</div>
+            </div>
+        </div>
+        <div style="font-size:0.82rem; color:#555; margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid #f0f0f0;">
+            Importa órdenes de trabajo históricas. Los equipos referenciados deben existir en la BD.
+        </div>
+        <form method="POST" action="{{ url_for('importacion.upload', tipo='historico') }}" enctype="multipart/form-data">
+            <div style="display:flex; gap:0.5rem; align-items:center; flex-wrap:wrap;">
+                <input type="file" name="fichero" accept=".xlsx" required
+                    style="flex:1; min-width:0; font-size:0.82rem; border:1px solid #ddd; border-radius:4px; padding:6px 8px; background:#fafafa;">
+                <button type="submit" class="btn btnPrimary btnSm">
+                    <i class="fas fa-upload"></i> Cargar
+                </button>
+            </div>
+            <div style="font-size:0.75rem; color:#999; margin-top:6px;">Máx. 10 MB · solo .xlsx</div>
+        </form>
+    </div>
+
+</div>
+{% endblock %}

@@ -92,6 +92,15 @@ app.register_blueprint(kpis_bp)
 from blueprints.mobile import bp as mobile_bp
 app.register_blueprint(mobile_bp)
 
+from blueprints.importacion import bp as importacion_bp
+app.register_blueprint(importacion_bp)
+
+from blueprints.configuracion import bp as configuracion_bp
+app.register_blueprint(configuracion_bp)
+
+from blueprints.qr import bp as qr_bp
+app.register_blueprint(qr_bp)
+
 # =============================================================================
 # GUARDIA MÓVIL: impide acceso a páginas de escritorio desde móvil/tablet
 # =============================================================================
@@ -2118,7 +2127,7 @@ def generarOTPreventivo(id):
 @app.route('/configuracion')
 @jwt_required()
 def verConfiguracion():
-    return render_template('configuracion.html')
+    return redirect(url_for('configuracion.index'))
 
 # =============================================================================
 # TIPOS DE INTERVENCIÓN
@@ -3068,5 +3077,5 @@ def eliminarUsuario(id):
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5001))
-    debug = os.environ.get('FLASK_DEBUG', 'false').lower() == 'true'
+    debug = os.environ.get('FLASK_DEBUG', 'true').lower() == 'true'
     app.run(debug=debug, host='0.0.0.0', port=port)

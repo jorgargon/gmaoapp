@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+
+{% block title %}Resultado Importación — GMAO{% endblock %}
+
+{% block content %}
+<div class="pageHeader">
+    <h2>
+        <i class="fas fa-file-import"></i>
+        {{ result.titulo }}
+    </h2>
+    <div style="display:flex; gap:0.75rem; align-items:center;">
+        <a href="{{ url_for('importacion.index') }}" class="btn btnSecondary">
+            <i class="fas fa-arrow-left"></i> Volver a Importación
+        </a>
+    </div>
+</div>
+
+{% if not result.exito and result.mensaje_error %}
+<div style="background:#FFEBEE; border:1px solid #EF9A9A; border-radius:8px; padding:1rem 1.25rem; margin-bottom:1.5rem; display:flex; align-items:flex-start; gap:0.75rem;">
+    <i class="fas fa-exclamation-triangle" style="color:#C62828; margin-top:2px; flex-shrink:0; font-size:1.1rem;"></i>
+    <div>
+        <strong style="color:#C62828;">Error en la importación</strong>
+        <div style="color:#333; margin-top:4px;">{{ result.mensaje_error }}</div>
+    </div>
+</div>
+{% endif %}
+
+{% if result.sheets %}
+<!-- Resumen global -->
+{% set total_excel = result.sheets | sum(attribute='total_excel') %}
+{% set total_insertadas = result.sheets | sum(attribute='insertadas') %}
+{% set total_actualizadas = result.sheets | sum(attribute='actualizadas') %}
+{% set total_errores = result.sheets | sum(attribute='errores') %}
+{% set total_omitidas = result.sheets | sum(attribute='omitidas') %}
+
+<div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:1rem; margin-bottom:1.5rem;">
+    <div style="background:#fff; border:1px solid #e0e0e0; border-radius:8px; padding:1rem; text-align:center; box-shadow:0 2px 4px rgba(0,0,0,.04);">
+        <div style="font-size:1.8rem; font-weight:700; color:#1565C0;">{{ total_excel }}</div>
+        <div style="font-size:0.8rem; color:#666; margin-top:4px;">Filas en Excel</div>
+    </div>
+    <div style="background:#fff; border:1px solid #C8E6C9; border-radius:8px; padding:1rem; text-align:center; box-shadow:0 2px 4px rgba(0,0,0,.04);">
+        <div style="font-size:1.8rem; font-weight:700; color:#2E7D32;">{{ total_insertadas }}</div>
+        <div style="font-size:0.8rem; color:#666; margin-top:4px;">Insertadas</div>
+    </div>
+    <div style="background:#fff; border:1px solid #BBDEFB; border-radius:8px; padding:1rem; text-align:center; box-shadow:0 2px 4px rgba(0,0,0,.04);">
+        <div style="font-size:1.8rem; font-weight:700; color:#1565C0;">{{ total_actualizadas }}</div>
+        <div style="font-size:0.8rem; color:#666; margin-top:4px;">Actualizadas</div>
+    </div>
+    <div style="background:#fff; border:1px solid {% if total_errores > 0 %}#FFCDD2{% else %}#e0e0e0{% endif %}; border-radius:8px; padding:1rem; text-align:center; box-shadow:0 2px 4px rgba(0,0,0,.04);">
+        <div style="font-size:1.8rem; font-weight:700; color:{% if total_errores > 0 %}#C62828{% else %}#9E9E9E{% endif %};">{{ total_errores }}</div>
+        <div style="font-size:0.8rem; color:#666; margin-top:4px;">Errores</div>
+    </div>
+    <div style="background:#fff; border:1px solid #e0e0e0; border-radius:8px; padding:1rem; text-align:center; box-shadow:0 2px 4px rgba(0,0,0,.04);">
+        <div style="font-size:1.8rem; font-weight:700; color:#757575;">{{ total_omitidas }}</div>
+        <div style="font-size:0.8rem; color:#666; margin-top:4px;">Omitidas</div>
+    </div>
+    <div style="background:#fff; border:1px solid #e0e0e0; border-radius:8px; padding:1rem; text-align:center; box-shadow:0 2px 4px rgba(0,0,0,.04);">
+        <div style="font-size:1.8rem; font-weight:700; color:#546E7A;">{{ result.tiempo_s }}s</div>
+        <div style="font-size:0.8rem; color:#666; margin-top:4px;">Tiempo</div>
+    </div>
+</div>
+
+<!-- Estado global -->
+{% if result.exito %}
+<div style="background:#E8F5E9; border:1px solid #A5D6A7; border-radius:8px; padding:0.85rem 1.25rem; margin-bottom:1.5rem; display:flex; align-items:center; gap:0.75rem;">
+    <i class="fas fa-check-circle" style="color:#2E7D32; font-size:1.1rem;"></i>
+    <strong style="color:#2E7D32;">Importación completada sin errores de validación.</strong>
+</div>
+{% else %}
+<div style="background:#FFF8E1; border:1px solid #FFE082; border-radius:8px; padding:0.85rem 1.25rem; margin-bottom:1.5rem; display:flex; align-items:center; gap:0.75rem;">
+    <i class="fas fa-exclamation-circle" style="color:#F57F17; font-size:1.1rem;"></i>
+    <strong style="color:#F57F17;">Importación completada con {{ total_errores }} error(es). Revise los detalles por hoja.</strong>
+</div>
+{% endif %}
+
+<!-- Detalle por hoja -->
+{% for sheet in result.sheets %}
+<div style="background:#fff; border:1px solid #e0e0e0; border-radius:8px; margin-bottom:1.25rem; overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,.04);">
+
+    <!-- Cabecera de hoja (colapsable) -->
+    <div onclick="toggleSheet('sheet_{{ loop.index }}')"
+         style="display:flex; align-items:center; justify-content:space-between; padding:0.9rem 1.25rem; cursor:pointer; background:{% if sheet.errores > 0 %}#FFEBEE{% else %}#F5F5F5{% endif %}; border-bottom:1px solid #e0e0e0; user-select:none;">
+        <div style="display:flex; align-items:center; gap:0.75rem;">
+            <i class="fas fa-table" style="color:#546E7A;"></i>
+            <strong style="font-size:0.95rem;">{{ sheet.nombre }}</strong>
+            <span style="font-size:0.8rem; color:#666;">{{ sheet.total_excel }} filas en fichero</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:0.5rem;">
+            {% if sheet.insertadas > 0 %}
+            <span style="background:#E8F5E9; color:#2E7D32; padding:2px 8px; border-radius:12px; font-size:0.78rem; font-weight:600;">
+                +{{ sheet.insertadas }} nuevas
+            </span>
+            {% endif %}
+            {% if sheet.actualizadas > 0 %}
+            <span style="background:#E3F2FD; color:#1565C0; padding:2px 8px; border-radius:12px; font-size:0.78rem; font-weight:600;">
+                ~{{ sheet.actualizadas }} actualizadas
+            </span>
+            {% endif %}
+            {% if sheet.omitidas > 0 %}
+            <span style="background:#F5F5F5; color:#757575; padding:2px 8px; border-radius:12px; font-size:0.78rem;">
+                {{ sheet.omitidas }} omitidas
+            </span>
+            {% endif %}
+            {% if sheet.errores > 0 %}
+            <span style="background:#FFEBEE; color:#C62828; padding:2px 8px; border-radius:12px; font-size:0.78rem; font-weight:600;">
+                {{ sheet.errores }} errores
+            </span>
+            {% endif %}
+            {% if sheet.advertencias | length > 0 %}
+            <span style="background:#FFF8E1; color:#F57F17; padding:2px 8px; border-radius:12px; font-size:0.78rem;">
+                {{ sheet.advertencias | length }} avisos
+            </span>
+            {% endif %}
+            <i class="fas fa-chevron-down" id="chevron_sheet_{{ loop.index }}" style="color:#9E9E9E; transition:transform .2s;"></i>
+        </div>
+    </div>
+
+    <!-- Cuerpo colapsable -->
+    <div id="sheet_{{ loop.index }}" style="{% if sheet.errores == 0 and sheet.advertencias | length == 0 %}display:none;{% endif %}">
+
+        {% if sheet.filas_error %}
+        <div style="padding:1rem 1.25rem; border-bottom:1px solid #FFCDD2; background:#FFFAFA;">
+            <div style="font-weight:600; color:#C62828; margin-bottom:0.75rem; display:flex; align-items:center; gap:0.5rem;">
+                <i class="fas fa-times-circle"></i> Errores de validación ({{ sheet.filas_error | length }})
+            </div>
+            <div class="tableContainer" style="margin:0; max-height:300px; overflow-y:auto;">
+                <table class="dataTable small" style="width:100%;">
+                    <thead>
+                        <tr>
+                            <th style="width:60px;">Fila</th>
+                            <th style="width:140px;">Campo</th>
+                            <th>Valor</th>
+                            <th>Motivo</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for err in sheet.filas_error %}
+                        <tr style="background:#FFF5F5;">
+                            <td style="text-align:center; font-weight:600; color:#C62828;">{{ err.fila }}</td>
+                            <td><code style="font-size:0.8rem; background:#FFE0E0; padding:1px 4px; border-radius:3px;">{{ err.campo }}</code></td>
+                            <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ err.valor }}">
+                                {{ err.valor if err.valor is not none else '—' }}
+                            </td>
+                            <td style="color:#C62828; font-size:0.85rem;">{{ err.motivo }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if sheet.advertencias %}
+        <div style="padding:1rem 1.25rem; background:#FFFDE7;">
+            <div style="font-weight:600; color:#F57F17; margin-bottom:0.75rem; display:flex; align-items:center; gap:0.5rem;">
+                <i class="fas fa-exclamation-triangle"></i> Advertencias ({{ sheet.advertencias | length }})
+            </div>
+            <div class="tableContainer" style="margin:0; max-height:250px; overflow-y:auto;">
+                <table class="dataTable small" style="width:100%;">
+                    <thead>
+                        <tr>
+                            <th style="width:60px;">Fila</th>
+                            <th style="width:140px;">Campo</th>
+                            <th>Valor</th>
+                            <th>Aviso</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for warn in sheet.advertencias %}
+                        <tr style="background:#FFFDE7;">
+                            <td style="text-align:center; font-weight:600; color:#F57F17;">{{ warn.fila }}</td>
+                            <td><code style="font-size:0.8rem; background:#FFF8E1; padding:1px 4px; border-radius:3px;">{{ warn.campo }}</code></td>
+                            <td style="max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ warn.valor }}">
+                                {{ warn.valor if warn.valor is not none else '—' }}
+                            </td>
+                            <td style="color:#E65100; font-size:0.85rem;">{{ warn.motivo }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if not sheet.filas_error and not sheet.advertencias %}
+        <div style="padding:1rem 1.25rem; color:#888; font-size:0.88rem; display:flex; align-items:center; gap:0.5rem;">
+            <i class="fas fa-check" style="color:#4CAF50;"></i> Sin errores ni advertencias en esta hoja.
+        </div>
+        {% endif %}
+
+    </div>
+</div>
+{% endfor %}
+
+{% endif %}
+
+<!-- Botón volver -->
+<div style="margin-top:1.5rem;">
+    <a href="{{ url_for('importacion.index') }}" class="btn btnSecondary">
+        <i class="fas fa-arrow-left"></i> Volver a Importación
+    </a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function toggleSheet(id) {
+    const el = document.getElementById(id);
+    const idx = id.split('_')[1];
+    const chevron = document.getElementById('chevron_' + id);
+    if (!el) return;
+    const isHidden = el.style.display === 'none';
+    el.style.display = isHidden ? 'block' : 'none';
+    if (chevron) {
+        chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+    }
+}
+
+// Expandir automáticamente las hojas con errores
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('[id^="sheet_"]').forEach(function (el) {
+        // Ya están visibles si tienen errores (set en el template)
+        const id = el.id;
+        const chevron = document.getElementById('chevron_' + id);
+        if (el.style.display !== 'none' && chevron) {
+            chevron.style.transform = 'rotate(180deg)';
+        }
+    });
+});
+</script>
+{% endblock %}

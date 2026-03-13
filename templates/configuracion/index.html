@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+
+{% block title %}Configuración{% endblock %}
+
+{% block content %}
+<div class="pageHeader">
+    <h2><i class="fas fa-cog"></i> Configuración</h2>
+</div>
+
+<div class="configCards">
+    <a href="{{ url_for('configuracion.tipos') }}" class="configCard">
+        <span class="configCardIcon"><i class="fas fa-tags"></i></span>
+        <span class="configCardTitle">Tipos de Intervención</span>
+        <span class="configCardDesc">Gestiona los tipos de intervención correctiva</span>
+    </a>
+    <a href="{{ url_for('configuracion.gamas') }}" class="configCard">
+        <span class="configCardIcon"><i class="fas fa-clipboard-list"></i></span>
+        <span class="configCardTitle">Gamas de Mantenimiento</span>
+        <span class="configCardDesc">Configura las gamas y planes de mantenimiento</span>
+    </a>
+    {% if current_user and current_user.nivel != 'tecnico' %}
+    <a href="{{ url_for('qr.etiquetas') }}" class="configCard">
+        <span class="configCardIcon"><i class="fas fa-qrcode"></i></span>
+        <span class="configCardTitle">Etiquetas QR</span>
+        <span class="configCardDesc">Genera etiquetas QR para activos e imprime en PDF</span>
+    </a>
+    <a href="{{ url_for('configuracion.tecnicos') }}" class="configCard">
+        <span class="configCardIcon"><i class="fas fa-user-cog"></i></span>
+        <span class="configCardTitle">Técnicos</span>
+        <span class="configCardDesc">Administra el equipo de técnicos de mantenimiento</span>
+    </a>
+    {% endif %}
+    {% if current_user and current_user.nivel == 'admin' %}
+    <a href="{{ url_for('configuracion.usuarios') }}" class="configCard">
+        <span class="configCardIcon"><i class="fas fa-users"></i></span>
+        <span class="configCardTitle">Usuarios</span>
+        <span class="configCardDesc">Gestiona cuentas de acceso y niveles de permiso</span>
+    </a>
+    <a href="{{ url_for('configuracion.general') }}" class="configCard">
+        <span class="configCardIcon"><i class="fas fa-sliders-h"></i></span>
+        <span class="configCardTitle">General</span>
+        <span class="configCardDesc">Parámetros generales del sistema GMAO</span>
+    </a>
+    <a href="{{ url_for('importacion.index') }}" class="configCard">
+        <span class="configCardIcon"><i class="fas fa-file-import"></i></span>
+        <span class="configCardTitle">Importación masiva</span>
+        <span class="configCardDesc">Carga inicial de activos, gamas, histórico y más</span>
+    </a>
+    {% endif %}
+</div>
+
+<style>
+    .configCards {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 16px;
+        margin-top: 1.5rem;
+    }
+    .configCard {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 24px 16px;
+        background: white;
+        border: 2px solid var(--border-color);
+        border-radius: 12px;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-align: center;
+        text-decoration: none;
+        color: inherit;
+    }
+    .configCard:hover {
+        border-color: #1976d2;
+        box-shadow: 0 4px 12px rgba(25, 118, 210, 0.12);
+        transform: translateY(-2px);
+    }
+    .configCardIcon {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        background: #e3f2fd;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.4rem;
+        color: #1976d2;
+    }
+    .configCardTitle {
+        font-weight: 600;
+        font-size: 0.92rem;
+        color: var(--text-primary);
+    }
+    .configCardDesc {
+        font-size: 0.78rem;
+        color: var(--text-secondary);
+        line-height: 1.3;
+    }
+</style>
+{% endblock %}

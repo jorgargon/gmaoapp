@@ -68,8 +68,8 @@
                 <span class="iconCircle"><i class="fas fa-chart-bar"></i></span>
                 <span class="buttonLabel">Informes</span>
             </a>
-            <a href="{{ url_for('verConfiguracion') }}"
-                class="sidebarIconButton {% if request.endpoint == 'verConfiguracion' %}active{% endif %}">
+            <a href="{{ url_for('configuracion.index') }}"
+                class="sidebarIconButton {% if request.blueprint == 'configuracion' %}active{% endif %}">
                 <span class="iconCircle"><i class="fas fa-cog"></i></span>
                 <span class="buttonLabel">Config</span>
             </a>

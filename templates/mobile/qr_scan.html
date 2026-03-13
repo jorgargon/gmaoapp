@@ -1,0 +1,128 @@
+{% extends "mobile/base.html" %}
+{% block title %}Escanear QR – GMAO{% endblock %}
+
+{% block header %}
+  <a href="{{ url_for('mobile.home') }}" class="m-header-back">
+    <i class="fas fa-arrow-left"></i>
+  </a>
+  <span class="m-header-title"><i class="fas fa-qrcode" style="margin-right:6px;opacity:.8"></i>Escanear QR</span>
+{% endblock %}
+
+{% block head %}
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+.qr-scanner-wrap {
+    padding: 16px;
+    text-align: center;
+}
+.qr-scanner-wrap h3 {
+    font-size: 1rem;
+    margin-bottom: 12px;
+    color: var(--m-text);
+}
+.qr-scanner-wrap p {
+    font-size: 0.82rem;
+    color: var(--m-text-muted);
+    margin-bottom: 16px;
+}
+#qr-reader {
+    max-width: 400px;
+    margin: 0 auto;
+    border-radius: var(--m-radius);
+    overflow: hidden;
+}
+#qr-reader video { border-radius: var(--m-radius); }
+.qr-error {
+    background: #fff3e0;
+    border: 1px solid #ffcc80;
+    border-radius: var(--m-radius);
+    padding: 16px;
+    margin: 16px;
+    text-align: center;
+}
+.qr-error i { color: #e65100; font-size: 1.5rem; margin-bottom: 8px; }
+.qr-error p { font-size: 0.85rem; color: #5d4037; }
+.qr-scanning-msg {
+    margin-top: 12px;
+    font-size: 0.82rem;
+    color: var(--m-text-muted);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="qr-scanner-wrap">
+    <h3>Apunta al código QR del equipo</h3>
+    <p>Acerca la cámara al código QR del activo para ver sus órdenes de trabajo</p>
+    <div id="qr-reader"></div>
+    <div class="qr-scanning-msg" id="scanMsg">Iniciando cámara…</div>
+    <div id="qr-error-box" style="display:none"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const QR_PATTERN = /\/movil\/qr\/(\w+)\/(\d+)/;
+
+function onScanSuccess(decodedText) {
+    // Si la URL contiene nuestro patrón, navegar directamente
+    if (QR_PATTERN.test(decodedText)) {
+        // Puede ser URL completa o ruta parcial
+        const match = decodedText.match(QR_PATTERN);
+        window.location.href = `/movil/qr/${match[1]}/${match[2]}`;
+        return;
+    }
+    mToast('Código QR no reconocido como activo GMAO', 'error');
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Comprobar si estamos en contexto seguro
+    if (!window.isSecureContext) {
+        document.getElementById('qr-reader').style.display = 'none';
+        document.getElementById('scanMsg').style.display = 'none';
+        const errBox = document.getElementById('qr-error-box');
+        errBox.style.display = 'block';
+        errBox.innerHTML = `
+            <div class="qr-error">
+                <i class="fas fa-lock"></i>
+                <p>La cámara requiere una conexión segura (HTTPS).<br>
+                Contacta con el administrador para habilitar HTTPS.</p>
+            </div>`;
+        return;
+    }
+
+    const scanner = new Html5Qrcode("qr-reader");
+    const config = {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        aspectRatio: 1.0,
+    };
+
+    scanner.start(
+        { facingMode: "environment" },
+        config,
+        (decodedText) => {
+            scanner.stop().then(() => {
+                onScanSuccess(decodedText);
+            });
+        },
+        () => {} // error silenciado en cada frame
+    ).then(() => {
+        document.getElementById('scanMsg').textContent = 'Buscando código QR…';
+    }).catch(err => {
+        document.getElementById('scanMsg').style.display = 'none';
+        const errBox = document.getElementById('qr-error-box');
+        errBox.style.display = 'block';
+        let msg = 'No se pudo acceder a la cámara.';
+        if (String(err).includes('NotAllowedError')) {
+            msg = 'Permiso de cámara denegado. Activa el permiso en los ajustes del navegador.';
+        }
+        errBox.innerHTML = `
+            <div class="qr-error">
+                <i class="fas fa-camera-rotate"></i>
+                <p>${msg}</p>
+            </div>`;
+    });
+});
+</script>
+{% endblock %}

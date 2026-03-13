@@ -1,0 +1,363 @@
+{% extends "base.html" %}
+
+{% block title %}Etiquetas QR — Configuración{% endblock %}
+
+{% block head %}
+<style>
+.qrFilters {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 0.75rem 1.25rem;
+    margin-bottom: 1rem;
+}
+.qrFiltersRow {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem 0.85rem;
+    align-items: flex-end;
+}
+.qrFilters .fg { display: flex; flex-direction: column; gap: 4px; }
+.qrFilters label { font-size: 0.78rem; color: #666; font-weight: 600; }
+.qrFilters select {
+    padding: 5px 8px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 0.82rem;
+    background: #fff;
+    min-width: 150px;
+}
+
+.qrAmbitoBadge {
+    background: #E3F2FD;
+    border: 1px solid #90CAF9;
+    border-radius: 8px;
+    padding: 0.45rem 1rem;
+    font-size: 0.8rem;
+    color: #1565C0;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.qrAmbitoBadge i { color: #90CAF9; }
+
+.qrResult {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 1.5rem;
+    text-align: center;
+}
+.qrResult .count {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+.qrResult .countLabel {
+    font-size: 0.85rem;
+    color: #666;
+    margin-bottom: 1rem;
+}
+.qrResult .btnDownload {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--primary);
+    color: #fff;
+    border: none;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+    text-decoration: none;
+}
+.qrResult .btnDownload:hover { background: var(--primary-dark); }
+.qrResult .btnDownload:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.qrResult .btnDownload .spinner {
+    display: none;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.qrPreviewWrap {
+    margin-top: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+.qrPreviewLabel {
+    background: #f8f9fa;
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 320px;
+}
+.qrPreviewLabel img { width: 80px; height: 80px; }
+.qrPreviewLabel .info { text-align: left; }
+.qrPreviewLabel .info .code { font-weight: 700; font-size: 0.9rem; }
+.qrPreviewLabel .info .name { font-size: 0.8rem; color: #555; }
+.qrPreviewLabel .info .tipo { font-size: 0.7rem; color: #999; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pageHeader">
+    <h2><i class="fas fa-qrcode"></i> Etiquetas QR de Activos</h2>
+</div>
+
+<!-- Filtros -->
+<div class="qrFilters">
+    <div class="qrFiltersRow">
+        <div class="fg">
+            <label>Planta</label>
+            <select id="selPlanta" onchange="onChangePlanta()">
+                <option value="">Todas las plantas</option>
+                {% for p in plantas %}
+                <option value="{{ p.id }}">{{ p.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="fg">
+            <label>Zona</label>
+            <select id="selZona" onchange="onChangeZona()" disabled>
+                <option value="">Todas</option>
+            </select>
+        </div>
+        <div class="fg">
+            <label>Línea</label>
+            <select id="selLinea" onchange="onChangeLinea()" disabled>
+                <option value="">Todas</option>
+            </select>
+        </div>
+        <div class="fg">
+            <label>Máquina</label>
+            <select id="selMaquina" onchange="onChangeMaquina()" disabled>
+                <option value="">Todas</option>
+            </select>
+        </div>
+    </div>
+</div>
+
+<!-- Badge ámbito -->
+<div class="qrAmbitoBadge" id="ambitoBadge">
+    <i class="fas fa-sitemap"></i>
+    <span id="ambitoTexto">Todos los activos de todas las plantas</span>
+</div>
+
+<!-- Resultado: conteo + descarga -->
+<div class="qrResult" id="qrResult">
+    <div class="count" id="etiquetasCount">—</div>
+    <div class="countLabel">etiquetas se generarán</div>
+    <div style="font-size:0.75rem;color:#999;margin-bottom:1rem">
+        Formato: 70×37 mm · 24 etiquetas por página A4
+    </div>
+    <button class="btnDownload" id="btnDescargar" onclick="descargarPDF()" disabled>
+        <span class="spinner" id="dlSpinner"></span>
+        <i class="fas fa-file-pdf"></i>
+        Descargar PDF
+    </button>
+
+    <div class="qrPreviewWrap" id="previewWrap" style="display:none">
+        <div class="qrPreviewLabel" id="previewLabel">
+            <img id="previewImg" src="" alt="QR Preview">
+            <div class="info">
+                <div class="code" id="previewCodigo"></div>
+                <div class="name" id="previewNombre"></div>
+                <div class="tipo" id="previewTipo"></div>
+            </div>
+        </div>
+        <div style="font-size:0.75rem;color:#999">Vista previa de ejemplo</div>
+    </div>
+</div>
+
+<script>
+// ─── Filtros en cascada ─────────────────────────────────────
+function onChangePlanta() {
+    const v = document.getElementById('selPlanta').value;
+    resetSelect('selZona'); resetSelect('selLinea'); resetSelect('selMaquina');
+    document.getElementById('selZona').disabled = !v;
+    document.getElementById('selLinea').disabled = true;
+    document.getElementById('selMaquina').disabled = true;
+    if (v) {
+        fetch(`/qr/api/zonas?planta=${v}`).then(r => r.json()).then(items => {
+            fillSelect('selZona', items, 'Todas');
+            document.getElementById('selZona').disabled = false;
+        });
+    }
+    actualizarAmbito();
+    actualizarConteo();
+}
+
+function onChangeZona() {
+    const v = document.getElementById('selZona').value;
+    resetSelect('selLinea'); resetSelect('selMaquina');
+    document.getElementById('selLinea').disabled = !v;
+    document.getElementById('selMaquina').disabled = true;
+    if (v) {
+        fetch(`/qr/api/lineas?zona=${v}`).then(r => r.json()).then(items => {
+            fillSelect('selLinea', items, 'Todas');
+            document.getElementById('selLinea').disabled = false;
+        });
+    }
+    actualizarAmbito();
+    actualizarConteo();
+}
+
+function onChangeLinea() {
+    const v = document.getElementById('selLinea').value;
+    resetSelect('selMaquina');
+    document.getElementById('selMaquina').disabled = !v;
+    if (v) {
+        fetch(`/qr/api/maquinas?linea=${v}`).then(r => r.json()).then(items => {
+            fillSelect('selMaquina', items, 'Todas');
+            document.getElementById('selMaquina').disabled = false;
+        });
+    }
+    actualizarAmbito();
+    actualizarConteo();
+}
+
+function onChangeMaquina() {
+    actualizarAmbito();
+    actualizarConteo();
+}
+
+function resetSelect(id) {
+    const sel = document.getElementById(id);
+    sel.innerHTML = '<option value="">Todas</option>';
+}
+
+function fillSelect(id, items, defaultLabel) {
+    const sel = document.getElementById(id);
+    sel.innerHTML = `<option value="">${defaultLabel}</option>`;
+    items.forEach(i => {
+        const opt = document.createElement('option');
+        opt.value = i.id;
+        opt.textContent = i.nombre;
+        sel.appendChild(opt);
+    });
+}
+
+function getFilterParams() {
+    const p = document.getElementById('selPlanta').value;
+    const z = document.getElementById('selZona').value;
+    const l = document.getElementById('selLinea').value;
+    const m = document.getElementById('selMaquina').value;
+    const params = new URLSearchParams();
+    if (p) params.set('planta', p);
+    if (z) params.set('zona', z);
+    if (l) params.set('linea', l);
+    if (m) params.set('maquina', m);
+    return params;
+}
+
+function actualizarAmbito() {
+    const labels = { selPlanta: 'Planta', selZona: 'Zona', selLinea: 'Línea', selMaquina: 'Máquina' };
+    const ids = ['selMaquina', 'selLinea', 'selZona', 'selPlanta'];
+    let texto = 'Todos los activos de todas las plantas';
+    for (const id of ids) {
+        const sel = document.getElementById(id);
+        if (sel.value) {
+            const nombre = sel.options[sel.selectedIndex].text;
+            texto = `${labels[id]}: ${nombre} (y todos sus subniveles)`;
+            break;
+        }
+    }
+    document.getElementById('ambitoTexto').textContent = texto;
+}
+
+// ─── Conteo ─────────────────────────────────────────────────
+function actualizarConteo() {
+    const params = getFilterParams();
+    fetch(`/qr/api/conteo?${params}`).then(r => r.json()).then(data => {
+        document.getElementById('etiquetasCount').textContent = data.total;
+        const btn = document.getElementById('btnDescargar');
+        btn.disabled = data.total === 0;
+
+        // Preview del primer activo
+        if (data.total > 0) {
+            mostrarPreview(params);
+        } else {
+            document.getElementById('previewWrap').style.display = 'none';
+        }
+    });
+}
+
+function mostrarPreview(params) {
+    // Obtenemos el primer activo de los filtros para previsualizar
+    // Usamos los mismos parámetros y tomamos el primer resultado
+    fetch(`/qr/api/conteo?${params}`).then(r => r.json()).then(() => {
+        // Tomamos los valores del último nivel seleccionado
+        const m = document.getElementById('selMaquina').value;
+        const l = document.getElementById('selLinea').value;
+        const z = document.getElementById('selZona').value;
+        const p = document.getElementById('selPlanta').value;
+
+        let tipo, id, nombre, codigo;
+        if (m) {
+            tipo = 'maquina'; id = m;
+            const sel = document.getElementById('selMaquina');
+            nombre = sel.options[sel.selectedIndex].text;
+        } else if (l) {
+            tipo = 'linea'; id = l;
+            const sel = document.getElementById('selLinea');
+            nombre = sel.options[sel.selectedIndex].text;
+        } else if (z) {
+            tipo = 'zona'; id = z;
+            const sel = document.getElementById('selZona');
+            nombre = sel.options[sel.selectedIndex].text;
+        } else if (p) {
+            tipo = 'planta'; id = p;
+            const sel = document.getElementById('selPlanta');
+            nombre = sel.options[sel.selectedIndex].text;
+        } else {
+            document.getElementById('previewWrap').style.display = 'none';
+            return;
+        }
+
+        document.getElementById('previewImg').src = `/qr/api/preview?equipoTipo=${tipo}&equipoId=${id}`;
+        document.getElementById('previewNombre').textContent = nombre;
+        document.getElementById('previewTipo').textContent =
+            {planta:'Planta', zona:'Zona', linea:'Línea', maquina:'Máquina', elemento:'Elemento'}[tipo] || '';
+        document.getElementById('previewWrap').style.display = 'flex';
+    });
+}
+
+// ─── Descarga PDF ───────────────────────────────────────────
+function descargarPDF() {
+    const btn = document.getElementById('btnDescargar');
+    const spinner = document.getElementById('dlSpinner');
+    btn.disabled = true;
+    spinner.style.display = 'inline-block';
+
+    const params = getFilterParams();
+    window.location.href = `/qr/descargar-pdf?${params}`;
+
+    // Restaurar botón tras unos segundos (la descarga es síncrona)
+    setTimeout(() => {
+        btn.disabled = false;
+        spinner.style.display = 'none';
+    }, 3000);
+}
+
+// ─── Init ───────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', actualizarConteo);
+</script>
+{% endblock %}

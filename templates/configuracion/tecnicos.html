@@ -1,0 +1,229 @@
+{% extends "base.html" %}
+
+{% block title %}Técnicos — Configuración{% endblock %}
+
+{% block content %}
+<div class="pageHeader">
+    <div style="display:flex; align-items:center; gap:12px;">
+        <a href="{{ url_for('configuracion.index') }}" class="btn btnSecondary btnSm">
+            <i class="fas fa-arrow-left"></i>
+        </a>
+        <h2><i class="fas fa-user-cog"></i> Técnicos</h2>
+    </div>
+</div>
+
+<div class="filtersBar">
+    <div class="filterGroup">
+        <label class="checkLabel">
+            <input type="checkbox" id="tecnicosSoloActivos" checked onchange="cargarTecnicos()">
+            <span>Solo activos</span>
+        </label>
+    </div>
+    {% if current_user and current_user.nivel == 'admin' %}
+    <div class="filterGroup" style="margin-left: auto;">
+        <button class="btn btnPrimary" onclick="mostrarFormularioTecnico()">
+            <i class="fas fa-plus"></i> Nuevo Técnico
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+<div class="tecnicosContainer">
+    <div id="tecnicosGrid" class="table-responsive">
+        <table class="dataTable">
+            <thead>
+                <tr>
+                    <th>Nombre</th>
+                    <th>Apellidos</th>
+                    <th>Especialidad</th>
+                    <th>Teléfono</th>
+                    <th>Tipo</th>
+                    <th>Coste/Hora</th>
+                    <th>Estado</th>
+                    <th style="width: 100px;">Acciones</th>
+                </tr>
+
+            </thead>
+            <tbody id="tecnicosTableBody">
+                <tr>
+                    <td colspan="8" class="text-center">
+                        <div class="loadingState"><i class="fas fa-spinner fa-spin"></i> Cargando técnicos...</div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    let tecnicosData = [];
+
+    async function cargarTecnicos() {
+        try {
+            const soloActivos = document.getElementById('tecnicosSoloActivos').checked;
+            tecnicosData = await apiCall(`/api/tecnicos?activo=${soloActivos}`);
+            renderTecnicos();
+        } catch (error) {
+            console.error('Error cargando técnicos:', error);
+            showToast('Error al cargar técnicos', 'error');
+        }
+    }
+
+    function renderTecnicos() {
+        const container = document.getElementById('tecnicosTableBody');
+        if (!container) return;
+
+        if (tecnicosData.length === 0) {
+            container.innerHTML = '<tr><td colspan="8" class="emptyState"><i class="fas fa-user-cog"></i><p>No hay técnicos definidos</p></td></tr>';
+            return;
+        }
+
+        let html = '';
+        tecnicosData.forEach(t => {
+            html += `
+            <tr onclick="mostrarFormularioTecnico(tecnicosData.find(x => x.id === ${t.id}))" style="cursor: pointer;">
+                <td><strong>${t.nombre}</strong></td>
+                <td>${t.apellidos || '-'}</td>
+                <td>${t.especialidad || '-'}</td>
+                <td>${t.telefono || '-'}</td>
+                <td><span class="tag ${t.tipo_tecnico === 'interno' ? 'tag-info' : 'tag-warning'}">${t.tipo_tecnico === 'interno' ? 'Interno' : 'Externo'}</span></td>
+                <td>${t.costeHora ? t.costeHora + ' €/h' : '-'}</td>
+                <td><span class="tag ${t.activo ? 'tag-success' : 'tag-muted'}">${t.activo ? 'Activo' : 'Inactivo'}</span></td>
+                <td class="actionsCell">
+                    <button class="btnIcon" onclick="event.stopPropagation(); mostrarFormularioTecnico(tecnicosData.find(x => x.id === ${t.id}))" title="Editar">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btnIcon btnDanger" onclick="event.stopPropagation(); eliminarTecnico(${t.id})" title="Eliminar">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+        `;
+        });
+
+        container.innerHTML = html;
+    }
+
+    function mostrarFormularioTecnico(tecnico = null) {
+        const esEdicion = tecnico !== null;
+
+        const html = `
+        <form id="formTecnico" onsubmit="event.preventDefault(); return false;">
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Nombre *</label>
+                    <input type="text" id="tecNombre" class="formControl" value="${tecnico?.nombre || ''}" required>
+                </div>
+                <div class="formGroup">
+                    <label>Apellidos</label>
+                    <input type="text" id="tecApellidos" class="formControl" value="${tecnico?.apellidos || ''}">
+                </div>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Especialidad</label>
+                    <input type="text" id="tecEspecialidad" class="formControl" value="${tecnico?.especialidad || ''}" placeholder="Ej: Electricista, Mecánico">
+                </div>
+                <div class="formGroup">
+                    <label>Coste Hora (€)</label>
+                    <input type="number" id="tecCoste" class="formControl" value="${tecnico?.costeHora || 0}" min="0" step="0.01">
+                </div>
+            </div>
+            <div class="formRow">
+                <div class="formGroup">
+                    <label>Teléfono</label>
+                    <input type="tel" id="tecTelefono" class="formControl" value="${tecnico?.telefono || ''}">
+                </div>
+                <div class="formGroup">
+                    <label>Tipo de Técnico *</label>
+                    <select id="tecTipoTecnico" class="formControl" required>
+                        <option value="interno" ${tecnico?.tipo_tecnico !== 'externo' ? 'selected' : ''}>Interno</option>
+                        <option value="externo" ${tecnico?.tipo_tecnico === 'externo' ? 'selected' : ''}>Externo</option>
+                    </select>
+                </div>
+            </div>
+            ${esEdicion ? `
+            <div class="formGroup">
+                <label>Estado</label>
+                <select id="tecActivo" class="formControl">
+                    <option value="true" ${tecnico.activo ? 'selected' : ''}>Activo</option>
+                    <option value="false" ${!tecnico.activo ? 'selected' : ''}>Inactivo</option>
+                </select>
+            </div>
+            ` : ''}
+        </form>
+    `;
+
+        const footer = `
+        <button class="btn btnSecondary" onclick="closeModal()">Cancelar</button>
+        <button class="btn btnPrimary" onclick="guardarTecnico(${tecnico?.id || 'null'})">${esEdicion ? 'Guardar' : 'Crear Técnico'}</button>
+    `;
+
+        openModal(esEdicion ? 'Editar Técnico' : 'Nuevo Técnico', html, footer);
+    }
+
+    async function guardarTecnico(id) {
+        const data = {
+            nombre: document.getElementById('tecNombre').value,
+            apellidos: document.getElementById('tecApellidos').value,
+            especialidad: document.getElementById('tecEspecialidad').value,
+            telefono: document.getElementById('tecTelefono').value,
+            tipo_tecnico: document.getElementById('tecTipoTecnico').value,
+            costeHora: parseFloat(document.getElementById('tecCoste').value) || 0,
+            activo: id ? (document.getElementById('tecActivo').value === 'true') : true
+        };
+
+        if (!data.nombre) {
+            showToast('El nombre es obligatorio', 'error');
+            return;
+        }
+
+        try {
+            if (id) {
+                await apiCall(`/api/tecnico/${id}`, 'PUT', data);
+                showToast('Técnico actualizado', 'success');
+            } else {
+                await apiCall('/api/tecnico', 'POST', data);
+                showToast('Técnico creado correctamente', 'success');
+            }
+            closeModal();
+            cargarTecnicos();
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    async function eliminarTecnico(id) {
+        const tecnico = tecnicosData.find(t => t.id === id);
+        if (!confirm(`¿Estás seguro de que quieres eliminar definitivamente al técnico "${tecnico?.nombre}"?`)) return;
+
+        try {
+            await apiCall(`/api/tecnico/${id}`, 'DELETE');
+            cargarTecnicos();
+            showToast('Técnico eliminado correctamente', 'warning');
+        } catch (error) {
+            showToast(error.message, 'error');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        cargarTecnicos();
+    });
+</script>
+
+<style>
+    .configTabContent {
+        padding: 20px 0;
+    }
+
+    .tag-success {
+        background: #e8f5e9 !important;
+        color: #2e7d32 !important;
+    }
+
+    .tag-muted {
+        background: #f5f5f5 !important;
+        color: #999 !important;
+    }
+</style>
+{% endblock %}

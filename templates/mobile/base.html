@@ -36,6 +36,11 @@
     {% block content %}{% endblock %}
   </main>
 
+  <!-- FAB QR Scanner -->
+  <a href="{{ url_for('mobile.qr_scan') }}" class="m-fab-qr" title="Escanear QR">
+    <i class="fas fa-qrcode"></i>
+  </a>
+
   <!-- Bottom nav -->
   <nav class="m-nav">
     <a href="{{ url_for('mobile.home') }}"

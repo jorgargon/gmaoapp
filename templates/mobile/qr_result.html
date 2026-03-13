@@ -1,0 +1,94 @@
+{% extends "mobile/base.html" %}
+{% block title %}{{ activo_nombre }} – GMAO{% endblock %}
+
+{% block header %}
+  <a href="{{ url_for('mobile.qr_scan') }}" class="m-header-back">
+    <i class="fas fa-arrow-left"></i>
+  </a>
+  <span class="m-header-title"><i class="fas fa-qrcode" style="margin-right:6px;opacity:.8"></i>Resultado QR</span>
+{% endblock %}
+
+{% block content %}
+
+{# Info del activo escaneado #}
+<div class="m-qr-activo">
+    <div class="m-qr-activo-icon">
+        {% set iconos = {'planta':'fa-industry','zona':'fa-map-marker-alt','linea':'fa-project-diagram','maquina':'fa-cogs','elemento':'fa-puzzle-piece'} %}
+        <i class="fas {{ iconos.get(equipo_tipo, 'fa-cube') }}"></i>
+    </div>
+    <div class="m-qr-activo-info">
+        <div class="m-qr-activo-tipo">{{ {'planta':'Planta','zona':'Zona','linea':'Línea','maquina':'Máquina','elemento':'Elemento'}.get(equipo_tipo, equipo_tipo) }}</div>
+        <div class="m-qr-activo-nombre">{{ activo_nombre }}</div>
+        {% if ruta %}
+        <div class="m-qr-activo-ruta">
+            {% for nivel in ruta %}
+                {% if not loop.last %}{{ nivel.nombre }} <i class="fas fa-chevron-right" style="font-size:0.55rem;opacity:0.5;margin:0 2px"></i> {% endif %}
+                {% if loop.last %}{{ nivel.nombre }}{% endif %}
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if ots %}
+{# Hay OTs pendientes #}
+<div class="m-qr-section-title">
+    <i class="fas fa-clipboard-list"></i>
+    {{ ots|length }} orden{{ 'es' if ots|length != 1 }} pendiente{{ 's' if ots|length != 1 }}
+</div>
+
+{% for ot in ots %}
+<a class="m-ot-card prio-{{ ot.prioridad }}" href="{{ url_for('mobile.ver_ot', id=ot.id) }}">
+  <div class="m-ot-card-inner">
+    <div class="m-ot-card-top">
+      <span class="m-ot-numero">{{ ot.numero }}</span>
+      <span class="m-ot-titulo">{{ ot.titulo }}</span>
+      <div class="m-ot-badges">
+        <span class="m-badge m-badge-estado-{{ ot.estado }}">
+          {% if ot.estado == 'en_curso' %}<i class="fas fa-play-circle"></i>{% endif %}
+          {{ ot.estado | replace('_', ' ') }}
+        </span>
+        <span class="m-badge m-badge-tipo-{{ ot.tipo }}">{{ ot.tipo }}</span>
+      </div>
+    </div>
+    <div class="m-ot-meta">
+      <span class="m-badge m-badge-prio-{{ ot.prioridad }}">
+        {% if ot.prioridad == 'urgente' %}<i class="fas fa-exclamation-triangle"></i>{% endif %}
+        {{ ot.prioridad }}
+      </span>
+      {% if ot.tecnicoAsignado %}
+        <span><i class="fas fa-user"></i> {{ ot.tecnicoAsignado }}</span>
+      {% endif %}
+      {% if ot.fechaCreacion %}
+        <span><i class="fas fa-calendar-alt"></i> {{ ot.fechaCreacion.strftime('%d/%m/%Y') }}</span>
+      {% endif %}
+    </div>
+  </div>
+</a>
+{% endfor %}
+
+{% else %}
+{# Sin OTs pendientes #}
+<div class="m-empty" style="margin-top:1.5rem">
+    <i class="fas fa-check-circle" style="color:var(--m-success)"></i>
+    <div class="m-empty-title">Sin órdenes pendientes</div>
+    <div class="m-empty-sub">No hay órdenes activas para este activo</div>
+</div>
+{% endif %}
+
+{# Siempre mostrar opción de crear nueva OT #}
+<div style="padding:16px 0">
+    <a href="{{ url_for('mobile.nueva_ot', equipoTipo=equipo_tipo, equipoId=equipo_id) }}"
+       class="m-btn m-btn-primary m-btn-full">
+        <i class="fas fa-plus-circle"></i> Crear nueva OT para {{ activo_nombre }}
+    </a>
+</div>
+
+{# Volver a escanear #}
+<div style="text-align:center;padding-bottom:16px">
+    <a href="{{ url_for('mobile.qr_scan') }}" style="font-size:0.85rem;color:var(--m-primary)">
+        <i class="fas fa-qrcode"></i> Escanear otro código
+    </a>
+</div>
+
+{% endblock %}
